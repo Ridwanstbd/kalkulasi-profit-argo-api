@@ -20,5 +20,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->app['router']->aliasMiddleware('role', \App\Http\Middleware\CheckRole::class);
+        $this->app['router']->aliasMiddleware('feature', \App\Http\Middleware\CheckSubscriptionFeature::class);
+        $this->app['router']->aliasMiddleware('limit', \App\Http\Middleware\CheckResourceLimit::class);
     }
 }

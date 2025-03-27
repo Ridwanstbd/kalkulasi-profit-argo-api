@@ -38,4 +38,18 @@ Route::middleware(JWTMiddleware::class)->group(function(){
             ]);
         });
     });
+
+    Route::middleware('feature:hhp_calculation')->prefix('user')->group(function(){
+        Route::prefix('hpp')->group(function () {
+            // Routes untuk HPP
+        });    
+    });
+
+    Route::middleware('limit:product')->prefix('user')->group(function(){
+        // Route untuk limitasi produk
+    });
+
+    Route::middleware('limit:material')->prefix('user')->group(function(){
+        // Rounte untuk Limitasi Material
+    });
 });
