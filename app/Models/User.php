@@ -72,5 +72,15 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->hasRole('admin');
     }
-
+    public function subscriptions()
+    {
+        return $this->hasMany(UserSubscription::class);
+    }
+    public function materialCategories() {
+        return $this->hasMany(MaterialCategory::class);    
+    }
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
 }

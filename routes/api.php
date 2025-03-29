@@ -1,13 +1,16 @@
 <?php
 
+use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
+use App\Http\Controllers\Admin\ManageUserSubscriptionController;
 use App\Http\Controllers\JWTAuthController;
+use App\Http\Controllers\SubscriptionPlanController;
+use App\Http\Controllers\User\SubscriptionController;
 use App\Http\Middleware\JWTMiddleware;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('register',[JWTAuthController::class,'register']);
 Route::post('login',[JWTAuthController::class,'login']);
-
+Route::apiResource('subscription-plans',SubscriptionPlanController::class)->only('index','show');
 Route::middleware(JWTMiddleware::class)->group(function(){
     // Authorization Route
     Route::post('logout',[JWTAuthController::class,'logout']);
@@ -15,34 +18,16 @@ Route::middleware(JWTMiddleware::class)->group(function(){
     Route::get('me',[JWTAuthController::class,'me']);
 
     Route::middleware('role:user')->prefix('user')->group(function(){
-        Route::get('dashboard', function() {
-            return response()->json([
-                'status' => 'success',
-                'message' => 'User dashboard'
-            ]);
-        });
+        Route::apiResource('subscriptions',SubscriptionController::class);
     });
 
     Route::middleware('role:admin')->prefix('admin')->group(function(){
-        Route::get('dashboard', function() {
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Admin dashboard'
-            ]);
-        });
-
-        Route::get('users', function() {
-            return response()->json([
-                'status' => 'success',
-                'users' => \App\Models\User::with('roles')->get()
-            ]);
-        });
+        Route::apiResource('subscription-plan',AdminSubscriptionPlanController::class);
+        Route::apiResource('manage-subscriber',ManageUserSubscriptionController::class)->only('index','show','update');
     });
 
-    Route::middleware('feature:hhp_calculation')->prefix('user')->group(function(){
-        Route::prefix('hpp')->group(function () {
-            // Routes untuk HPP
-        });    
+    Route::middleware('feature:hhp_calculation')->prefix('hpp-calculation')->group(function(){
+        // Routes untuk HPP
     });
 
     Route::middleware('limit:product')->prefix('user')->group(function(){
