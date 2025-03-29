@@ -35,8 +35,8 @@ class Material extends Model
         return $this->hasMany(SupplierMaterial::class);
     }
 
-    public function productMaterials()
+    public function products()
     {
-        return $this->belongsToMany(Product::class, 'product_materials')->withPivot('quantity');
+        return $this->belongsToMany(Product::class, 'product_materials')->withPivot('quantity')->withTimestamps();
     }
 }

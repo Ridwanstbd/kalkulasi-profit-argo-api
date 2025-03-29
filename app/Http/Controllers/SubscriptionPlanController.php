@@ -31,7 +31,8 @@ class SubscriptionPlanController extends Controller
      */
     public function show(string $id)
     {
-        $plan = SubscriptionPlan::find($id);
+        $planId = (int) $id;
+        $plan = SubscriptionPlan::find($planId);
         
         if (!$plan) {
             return response()->json([

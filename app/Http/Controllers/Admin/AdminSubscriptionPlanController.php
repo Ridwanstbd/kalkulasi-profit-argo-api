@@ -78,7 +78,8 @@ class AdminSubscriptionPlanController extends Controller
     public function show(string $id)
     {
         try {
-            $plan = SubscriptionPlan::find($id);
+            $planId = (int) $id;
+            $plan = SubscriptionPlan::find($planId);
             if (!$plan) {
                 return response()->json([
                     'success' => false,
@@ -122,7 +123,8 @@ class AdminSubscriptionPlanController extends Controller
         }
         try {
             DB::beginTransaction();
-            $plan = SubscriptionPlan::findOrFail($id);
+            $planId = (int) $id;
+            $plan = SubscriptionPlan::findOrFail($planId);
             if (!$plan) {
                 return response()->json([
                     'success' => false,
@@ -153,7 +155,8 @@ class AdminSubscriptionPlanController extends Controller
     {
         try {
             DB::beginTransaction();
-            $plan = SubscriptionPlan::find($id);
+            $planId = (int) $id;
+            $plan = SubscriptionPlan::find($planId);
             if (!$plan) {
                 return response()->json([
                     'success' => false,

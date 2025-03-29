@@ -23,6 +23,6 @@ class ProductCost extends Model
 
     public function costComponent()
     {
-        return $this->belongsTo(CostComponent::class);
+        return $this->belongsTo(CostComponent::class, 'cost_component_id');
     }
 }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
 use App\Http\Controllers\Admin\ManageUserSubscriptionController;
+use App\Http\Controllers\Feature\HppController;
 use App\Http\Controllers\JWTAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
 use App\Http\Controllers\User\SubscriptionController;
@@ -26,8 +27,8 @@ Route::middleware(JWTMiddleware::class)->group(function(){
         Route::apiResource('manage-subscriber',ManageUserSubscriptionController::class)->only('index','show','update');
     });
 
-    Route::middleware('feature:hhp_calculation')->prefix('hpp-calculation')->group(function(){
-        // Routes untuk HPP
+    Route::middleware('feature:hhp_calculation')->group(function(){
+        Route::apiResource('hpp',HppController::class);
     });
 
     Route::middleware('limit:product')->prefix('user')->group(function(){

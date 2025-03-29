@@ -95,8 +95,8 @@ class SubscriptionController extends Controller
     public function show(string $id)
     {
         $user = JWTAuth::user();
-        
-        $subscription = UserSubscription::where('user_id',$id)
+        $subscriptionId = (int) $id;
+        $subscription = UserSubscription::where('user_id',$subscriptionId)
         ->where('status','active')
         ->where('end_date','>=',Carbon::now()->format('Y-m-d'))
         ->with('subscriptionPlan')
@@ -128,7 +128,8 @@ class SubscriptionController extends Controller
     {
         try {
             DB::beginTransaction();
-            $subscription = UserSubscription::find($id);
+            $subscriptionId = (int) $id;
+            $subscription = UserSubscription::find($subscriptionId);
             if (!$subscription) {
                 return response()->json([
                     'success' => false,
@@ -208,7 +209,8 @@ class SubscriptionController extends Controller
     {
         try {
             DB::beginTransaction();
-            $subscription = UserSubscription::find($id);
+            $subscriptionId = (int) $id;
+            $subscription = UserSubscription::find($subscriptionId);
             
             if (!$subscription) {
                 return response()->json([

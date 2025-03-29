@@ -45,14 +45,15 @@ class ManageUserSubscriptionController extends Controller
     public function show(string $id)
     {
         try {
-        $user = User::find($id);
+        $userId = (int) $id;
+        $user = User::find($userId);
             if(!$user){
                 return response()->json([
                     'success' => false,
                     'message' => 'User tidak ditemukan'
                 ]);
             }
-            $subscriptions = UserSubscription::where('user_id',$id)->with('subscriptionPlan')->orderBy('created_at','desc')->get();
+            $subscriptions = UserSubscription::where('user_id',$userId)->with('subscriptionPlan')->orderBy('created_at','desc')->get();
             return response()->json([
                 'success' => true,
                 'message' => 'Pelanggan berhasil ditampilkan!',
@@ -89,7 +90,8 @@ class ManageUserSubscriptionController extends Controller
         }
         try {
             DB::beginTransaction();
-            $subscription = UserSubscription::find($id);
+            $subscriptionId = (int) $id;
+            $subscription = UserSubscription::find($subscriptionId);
         
             if (!$subscription) {
                 return response()->json([

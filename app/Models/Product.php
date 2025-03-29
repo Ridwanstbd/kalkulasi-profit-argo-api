@@ -30,16 +30,49 @@ class Product extends Model
 
     public function category()
     {
-        return $this->belongsTo(ProductCategory::class);
+        return $this->belongsTo(ProductCategory::class, 'category_id');
     }
 
-    public function productCosts()
+    public function costs()
     {
         return $this->hasMany(ProductCost::class);
     }
 
-    public function productMaterials()
+    public function materials()
     {
-        return $this->belongsToMany(Material::class, 'product_materials')->withPivot('quantity');
+        return $this->belongsToMany(Material::class, 'product_materials')
+                    ->withPivot('quantity')
+                    ->withTimestamps();
+    }
+    
+    public function getHppBreakdownAttribute()
+    {
+        $directMaterial = 0;
+        $directLabor = 0;
+        $overhead = 0;
+        $packaging = 0;
+        $other = 0;
+
+        foreach ($this->costs as $cost) {
+            switch ($cost->costComponent->component_type){
+                case 'direct_material':
+                    $directMaterial += $cost->amount;
+                    break;
+                case 'direct_labor':
+                    $directLabor += $cost->amount;
+                    break;
+                case 'overhead':
+                    $overhead += $cost->amount;
+                    break;
+                case 'packaging':
+                    $packaging += $cost->amount;
+                    break;
+                case 'other':
+                    $other += $cost->amount;
+                    break;
+
+            }
+        }
+        
     }
 }

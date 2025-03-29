@@ -18,6 +18,6 @@ class CostComponent extends Model
 
     public function productCosts()
     {
-        return $this->hasMany(ProductCost::class);
+        return $this->hasMany(ProductCost::class,'cost_component_id');
     }
 }
