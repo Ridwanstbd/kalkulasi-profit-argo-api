@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Feature;
 
 use App\Http\Controllers\Controller;
-use App\Models\CostComponent;
-use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductCost;
 use App\Models\ProductMaterial;

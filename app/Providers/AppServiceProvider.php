@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\PricingSimulation;
+use App\Observers\PricingSimulationObserver;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,5 +24,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app['router']->aliasMiddleware('role', \App\Http\Middleware\CheckRole::class);
         $this->app['router']->aliasMiddleware('feature', \App\Http\Middleware\CheckSubscriptionFeature::class);
         $this->app['router']->aliasMiddleware('limit', \App\Http\Middleware\CheckResourceLimit::class);
+        PricingSimulation::observe(PricingSimulationObserver::class);
     }
 }

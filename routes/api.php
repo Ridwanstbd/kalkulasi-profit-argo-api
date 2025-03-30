@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
 use App\Http\Controllers\Admin\ManageUserSubscriptionController;
 use App\Http\Controllers\Feature\HppController;
+use App\Http\Controllers\Feature\PricingController;
 use App\Http\Controllers\JWTAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
 use App\Http\Controllers\User\SubscriptionController;
@@ -29,6 +30,11 @@ Route::middleware(JWTMiddleware::class)->group(function(){
 
     Route::middleware('feature:hhp_calculation')->group(function(){
         Route::apiResource('hpp',HppController::class);
+    });
+
+    Route::middleware('feature:pricing')->group(function() {
+        Route::apiResource('pricing', PricingController::class);
+        Route::put('pricing/{id}/apply',[PricingController::class,'applySimulation']);
     });
 
     Route::middleware('limit:product')->prefix('user')->group(function(){
