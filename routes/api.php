@@ -18,6 +18,8 @@ Route::middleware(JWTMiddleware::class)->group(function(){
     Route::post('logout',[JWTAuthController::class,'logout']);
     Route::post('refresh',[JWTAuthController::class,'refresh']);
     Route::get('me',[JWTAuthController::class,'me']);
+    Route::post('forgot-password',[JWTAuthController::class, 'forgotPassword']);
+    Route::post('reset-password',[JWTAuthController::class, 'resetPassword']);
 
     Route::middleware('role:user')->prefix('user')->group(function(){
         Route::apiResource('subscriptions',SubscriptionController::class);

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Role;
+use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Tymon\JWTAuth\Exceptions\JWTException;
@@ -65,7 +67,7 @@ class JWTAuthController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation error',
+                'message' => 'Validasi error',
                 'errors' => $validator->errors()
             ], 400);
         }
@@ -78,7 +80,7 @@ class JWTAuthController extends Controller
             if (!$token = JWTAuth::attempt($credentials)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Login credentials are invalid'
+                    'message' => 'Kredensial tidak valid'
                 ], 401);
             }
             $user = JWTAuth::user();
@@ -90,7 +92,7 @@ class JWTAuthController extends Controller
            
             return response()->json([
                 'success' => true,
-                'message' => 'Login successful',
+                'message' => 'Login berhasil',
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -108,13 +110,13 @@ class JWTAuthController extends Controller
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Could not create token',
+                'message' => 'Tidak bisa membuat token',
                 'error' => $e->getMessage()
             ], 500);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Login failed',
+                'message' => 'Login gagal',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -129,12 +131,12 @@ class JWTAuthController extends Controller
             JWTAuth::invalidate(JWTAuth::getToken());
             return response()->json([
                 'success' => true,
-                'message' => 'Logged out successfully'
+                'message' => 'Berhasil Keluar'
             ]);
         } catch (JWTException $exception) {
             return response()->json([
                 'success' => false,
-                'message' => 'Sorry, the user cannot be logged out'
+                'message' => 'Maaf pengguna gagal keluar'
             ], 500);
         }
     }
@@ -151,7 +153,7 @@ class JWTAuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Token refreshed successfully',
+                'message' => 'Token sukses diperbarui',
                 'authorization' => [
                     'token' => $token,
                     'type' => 'Bearer',
@@ -161,9 +163,109 @@ class JWTAuthController extends Controller
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Could not refresh token',
+                'message' => 'Tidak bisa memperbarui token',
                 'error' => $e->getMessage()
             ], 401);
+        }
+    }
+    public function forgotPassword(Request $request){
+        $validator = Validator::make($request->all(),[
+            'email' => 'required|email|exists:users'
+        ]);
+        if($validator->fails()){
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ],400);
+        }
+        try {
+            $status = Password::sendResetLink(
+                $request->only('email')
+            );
+            if($status === Password::RESET_LINK_SENT){
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Link perubahan password sudah kami kirimkan ke email kamu'
+                ]);
+            }else{
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kami gagal mengirim link reset'
+                ],500);
+            }
+        }catch (\Exception $e){
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memproses permintaan perubahan password',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function resetPassword(Request $request){
+        $validator = Validator::make($request->all(), [
+            'token' => 'required',
+            'email' => 'required|email|exists:users',
+            'password' => 'required|string|min:6|confirmed',
+            'password_confirmation' => 'required|string|min:6'
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validasi Error',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+        try {
+            $status = Password::reset(
+                $request->only('email', 'password', 'password_confirmation', 'token'),
+                function ($user, $password) {
+                    $user->forceFill([
+                        'password' => Hash::make($password)
+                    ]);
+    
+                    $user->save();
+    
+                    event(new PasswordReset($user));
+                }
+            );
+            if ($status === Password::PASSWORD_RESET) {
+                // Otomatis login setelah reset password
+                $credentials = $request->only('email', 'password');
+                $token = JWTAuth::attempt($credentials);
+                
+                $user = JWTAuth::user();
+                $ttl = config('jwt.ttl');
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Kata sandi berhasil direset',
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => $user->roles->pluck('name'),
+                        'is_admin' => $user->isAdmin()
+                    ],
+                    'authorization' => [
+                        'token' => $token,
+                        'type' => 'Bearer',
+                        'expires_in' => $ttl * 60
+                    ]
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Gagal untuk reset kata sandi'
+                ], 400);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal untuk reset kata sandi',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
     public function me(){
@@ -173,7 +275,7 @@ class JWTAuthController extends Controller
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found'
+                    'message' => 'Pengguna tidak ditemukan'
                 ], 404);
             }
             
@@ -190,7 +292,7 @@ class JWTAuthController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Error retrieving user details',
+                'message' => 'Error mengambil detail pengguna',
                 'error' => $e->getMessage()
             ], 500);
         }
