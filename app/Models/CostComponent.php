@@ -10,10 +10,10 @@ class CostComponent extends Model
     use HasFactory;
 
     protected $fillable = [
+        'user_id',
         'name',
         'description',
         'component_type',
-        'is_fixed',
     ];
 
     public function productCosts()

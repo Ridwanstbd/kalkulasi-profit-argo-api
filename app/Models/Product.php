@@ -11,16 +11,12 @@ class Product extends Model
 
     protected $fillable = [
         'user_id',
-        'category_id',
         'name',
         'sku',
         'description',
-        'production_capacity',
         'unit',
         'hpp',
         'selling_price',
-        'min_stock',
-        'current_stock',
     ];
 
     public function user()
@@ -28,22 +24,16 @@ class Product extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function category()
-    {
-        return $this->belongsTo(ProductCategory::class, 'category_id');
-    }
 
     public function costs()
     {
         return $this->hasMany(ProductCost::class);
     }
-
-    public function materials()
+    public function priceSchemas()
     {
-        return $this->belongsToMany(Material::class, 'product_materials')
-                    ->withPivot('quantity')
-                    ->withTimestamps();
+        return $this->hasMany(PriceSchema::class);
     }
+
     
     public function getHppBreakdownAttribute()
     {
@@ -73,17 +63,14 @@ class Product extends Model
 
             }
         }
-        $rawMaterialCost = 0;
-        foreach($this->materials as $material){
-            $rawMaterialCost += $material->pivot->quantity * $material->price_per_unit; 
-        }
-        $totalDirectMaterial = $directMaterial + $rawMaterialCost;
+        
+        $totalDirectMaterial = $directMaterial; 
         $totalHpp = $totalDirectMaterial + $directLabor + $overhead + $packaging + $other;
 
         $percentageDirectMaterial = $totalHpp > 0 ? ($totalDirectMaterial / $totalHpp) * 100 : 0;
         $percentageDirectLabor = $totalHpp > 0 ? ($directLabor / $totalHpp) * 100 : 0;
-        $percentageOverhead = $totalHpp ? ($overhead / $totalHpp) * 100 : 0;
-        $percentagePackaging = $totalHpp > 0 ? ($packaging / $totalHpp) : 0;
+        $percentageOverhead = $totalHpp > 0 ? ($overhead / $totalHpp) * 100 : 0;
+        $percentagePackaging = $totalHpp > 0 ? ($packaging / $totalHpp) * 100 : 0; 
         $percentageOther = $totalHpp > 0 ? ($other / $totalHpp) * 100 : 0;
 
         return [

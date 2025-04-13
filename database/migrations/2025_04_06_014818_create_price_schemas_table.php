@@ -11,17 +11,20 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('suppliers', function (Blueprint $table) {
+        Schema::create('price_schemas', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->string('name', 100);
-            $table->string('contact_person', 100)->nullable();
-            $table->string('phone', 20)->nullable();
-            $table->string('email', 100)->nullable();
-            $table->text('address')->nullable();
+            $table->unsignedBigInteger('product_id');
+            $table->string('level_name',100);
+            $table->integer('level_order');
+            $table->decimal('discount_percentage',5,2);
+            $table->decimal('purchase_price',12,2);
+            $table->decimal('selling_price',12,2);
+            $table->decimal('profit_amount',12,2);
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
         });
     }
 
@@ -30,6 +33,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('suppliers');
+        Schema::dropIfExists('price_schemas');
     }
 };

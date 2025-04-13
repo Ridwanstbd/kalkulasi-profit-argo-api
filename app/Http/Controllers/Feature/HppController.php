@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Feature;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCost;
-use App\Models\ProductMaterial;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -20,7 +19,7 @@ class HppController extends Controller
     {
         $user = JWTAuth::user();
         $products = Product::where('user_id',$user->id)
-        ->with(['costs.costComponent','materials.material'])
+        ->with('costs.costComponent')
         ->get();
         if($products->isEmpty()){
             return response()->json([
@@ -46,9 +45,6 @@ class HppController extends Controller
             'costs.*.cost_component_id' => 'required|exists:cost_components,id',
             'costs.*.amount' => 'required|numeric|min:0',
             'costs.*.description' => 'nullable|string',
-            'materials' => 'required|array',
-            'materials.*.material_id' => 'required|exists:materials,id',
-            'materials.*.quantity' => 'required|numeric|min:0'
         ]);
         if($validator->fails()){
             return response()->json([
@@ -83,21 +79,12 @@ class HppController extends Controller
                 ]);
             }
 
-            ProductMaterial::where('product_id',$productId)->delete();
-            foreach ($request->materials as $material) {
-                ProductMaterial::create([
-                    'product_id' => $productId,
-                    'material_id' => $material['material_id'],
-                    'quantity' => $material['quantity'],
-                ]);
-            }
-
             $hpp = $this->calculateHpp($productId);
             $product->hpp = $hpp;
             $product->save();
             DB::commit();
 
-            $updatedProduct = Product::with(['costs.costComponent', 'materials.material'])->find($productId);
+            $updatedProduct = Product::with('costs.costComponent')->find($productId);
             return response()->json([
                 'success' => true,
                 'message' => 'HPP berhasil disimpan',
@@ -123,7 +110,7 @@ class HppController extends Controller
         $user = JWTAuth::user();
         $product = Product::where('id',$productId)
                 ->where('user_id',$user->id)
-                ->with(['costs.costComponent', 'materials.material'])
+                ->with(['costs.costComponent'])
                 ->first();
         if(!$product){
             return response()->json([
@@ -146,10 +133,7 @@ class HppController extends Controller
             'costs' => 'sometimes|required|array',
             'costs.*.cost_component_id' => 'required|exists:cost_components,id',
             'costs.*.amount' => 'required|numeric|min:0',
-            'costs.*.description' => 'nullable|string',
-            'materials' => 'sometimes|required|array',
-            'materials.*.material_id' => 'required|exists:materials,id',
-            'materials.*.quantity' => 'required|numeric|min:0',
+            'costs.*.description' => 'nullable|string'
         ]);
         
         if ($validator->fails()) {
@@ -187,22 +171,12 @@ class HppController extends Controller
                     ]);
                 }
             }
-            if($request->has('materials')){
-                ProductMaterial::where('product_id', $productId)->delete();
-                foreach ($request->materials as $material) {
-                    ProductMaterial::create([
-                        'product_id' => $id,
-                        'material_id' => $material['material_id'],
-                        'quantity' => $material['quantity'],
-                    ]);
-                }
-            }
             $hpp = $this->calculateHpp($productId);
             $product->hpp = $hpp;
             $product->save();
             DB::commit();
 
-            $updatedProduct = Product::with(['costs.costComponent', 'materials.material'])->find($productId);
+            $updatedProduct = Product::with('costs.costComponent')->find($productId);
             return response()->json([
                 'success' => true,
                 'message' => 'HPP berhasil diperbarui',
@@ -239,7 +213,6 @@ class HppController extends Controller
         try {
             DB::beginTransaction();
             ProductCost::where('product_id',$productId)->delete();
-            ProductMaterial::where('product_id', $productId)->delete();
             $product->hpp = 0;
             $product->save();
             DB::commit();
@@ -260,12 +233,7 @@ class HppController extends Controller
     private function calculateHpp($productId)
     {
         $totalCost = ProductCost::where('product_id', $productId)->sum('amount');
-        $materialCosts = 0;
-        $productMaterials = ProductMaterial::where('product_id',$productId)->with('material')->get();
-
-        foreach ($productMaterials as $productMaterial) {
-            $materialCosts += $productMaterial->quantity * $productMaterial->material->price_per_unit;
-        }
-        return $totalCost + $materialCosts;
+        
+        return $totalCost;
     }
 }

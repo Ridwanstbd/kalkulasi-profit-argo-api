@@ -172,6 +172,7 @@ class JWTAuthController extends Controller
         $validator = Validator::make($request->all(),[
             'email' => 'required|email|exists:users'
         ]);
+        
         if($validator->fails()){
             return response()->json([
                 'success' => false,
@@ -179,22 +180,37 @@ class JWTAuthController extends Controller
                 'errors' => $validator->errors()
             ],400);
         }
+        
         try {
             $status = Password::sendResetLink(
                 $request->only('email')
             );
+            
+            \Log::info('Password reset attempt', [
+                'email' => $request->email,
+                'status' => $status,
+                'status_string' => __($status)
+            ]);
+            
             if($status === Password::RESET_LINK_SENT){
                 return response()->json([
                     'success' => true,
                     'message' => 'Link perubahan password sudah kami kirimkan ke email kamu'
                 ]);
-            }else{
+            } else {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Kami gagal mengirim link reset'
+                    'message' => 'Kami gagal mengirim link reset',
+                    'debug_info' => __($status) 
                 ],500);
             }
-        }catch (\Exception $e){
+        } catch (\Exception $e){
+            \Log::error('Password reset exception', [
+                'email' => $request->email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses permintaan perubahan password',
@@ -231,7 +247,6 @@ class JWTAuthController extends Controller
                 }
             );
             if ($status === Password::PASSWORD_RESET) {
-                // Otomatis login setelah reset password
                 $credentials = $request->only('email', 'password');
                 $token = JWTAuth::attempt($credentials);
                 
