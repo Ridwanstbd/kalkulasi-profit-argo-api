@@ -17,7 +17,6 @@ return new class extends Migration
             $table->string('name', 100);
             $table->string('sku', 50);
             $table->text('description')->nullable();
-            $table->string('unit', 20);
             $table->decimal('hpp', 12, 2)->default(0);
             $table->decimal('selling_price', 12, 2)->default(0);
             $table->timestamps();

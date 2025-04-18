@@ -3,8 +3,11 @@
 use App\Http\Controllers\Admin\AdminSubscriptionPlanController;
 use App\Http\Controllers\Admin\ManageUserSubscriptionController;
 use App\Http\Controllers\Feature\CostComponentController;
+use App\Http\Controllers\Feature\ExpenseCategoryController;
 use App\Http\Controllers\Feature\HppController;
+use App\Http\Controllers\Feature\OperationalExpenseController;
 use App\Http\Controllers\Feature\PriceSchemeController;
+use App\Http\Controllers\Feature\SalesRecordController;
 use App\Http\Controllers\JWTAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
 use App\Http\Controllers\User\ProductController;
@@ -34,9 +37,18 @@ Route::middleware(JWTMiddleware::class)->group(function(){
         Route::apiResource('manage-subscriber',ManageUserSubscriptionController::class)->only('index','show','update');
     });
 
+    Route::middleware('feature:operational_expense')->group(function(){
+        Route::apiResource('expense-categories', ExpenseCategoryController::class);
+        Route::apiResource('operational-expenses', OperationalExpenseController::class);    
+    });
+
     Route::middleware('feature:hhp_calculation')->group(function(){
         Route::apiResource('cost-components',CostComponentController::class);
         Route::apiResource('hpp',HppController::class);
+    });
+
+    Route::middleware('feature:sales_recap')->group(function(){
+        Route::apiResource('sales',SalesRecordController::class);
     });
 
     Route::middleware('feature:pricing')->group(function() {

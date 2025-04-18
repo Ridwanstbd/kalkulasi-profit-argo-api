@@ -85,7 +85,7 @@ class ProductController extends Controller
         try {
             $product = Product::where('id',$id)
                 ->where('user_id',$user->id)
-                ->with(['category','costs','materials'])
+                ->with(['costs'])
                 ->first();
             if(!$product){
                 return response()->json([

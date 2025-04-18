@@ -43,7 +43,10 @@ class HppController extends Controller
             'product_id' => 'required|exists:products,id',
             'costs' => 'required|array',
             'costs.*.cost_component_id' => 'required|exists:cost_components,id',
-            'costs.*.amount' => 'required|numeric|min:0',
+            'costs.*.unit' => 'required|string',
+            'costs.*.unit_price' => 'required|numeric|min:0',
+            'costs.*.quantity' => 'required|numeric|min:0',
+            'costs.*.conversion_qty' => 'required|numeric|min:0',
             'costs.*.description' => 'nullable|string',
         ]);
         if($validator->fails()){
@@ -71,10 +74,18 @@ class HppController extends Controller
 
             ProductCost::where('product_id', $productId)->delete();
             foreach ($request->costs as $cost){
+                $amount = ($cost['conversion_qty'] ?? 1) > 0
+                ? ($cost['unit_price'] / $cost['conversion_qty']) * $cost['quantity']
+                : $cost['unit_price'] * $cost['quantity'];
+
                 ProductCost::create([
                     'product_id' => $productId,
                     'cost_component_id' => $cost['cost_component_id'],
-                    'amount' => $cost['amount'],
+                    'unit' => $cost['unit'],
+                    'unit_price' => $cost['unit_price'],
+                    'quantity' => $cost['quantity'],
+                    'conversion_qty' => $cost['conversion_qty'],
+                    'amount' => $amount,
                     'description' => $cost['description'] ?? null,
                 ]);
             }
@@ -130,10 +141,14 @@ class HppController extends Controller
     public function update(Request $request, string $id)
     {
         $validator = Validator::make($request->all(), [
-            'costs' => 'sometimes|required|array',
+            'costs' => 'required|array',
+            'costs.*.id' => 'sometimes|exists:product_costs,id',
             'costs.*.cost_component_id' => 'required|exists:cost_components,id',
-            'costs.*.amount' => 'required|numeric|min:0',
-            'costs.*.description' => 'nullable|string'
+            'costs.*.unit' => 'required|string',
+            'costs.*.unit_price' => 'required|numeric|min:0',
+            'costs.*.quantity' => 'required|numeric|min:0',
+            'costs.*.conversion_qty' => 'required|numeric|min:0',
+            'costs.*.description' => 'nullable|string',
         ]);
         
         if ($validator->fails()) {
@@ -145,9 +160,10 @@ class HppController extends Controller
         }
         
         $user = JWTAuth::user();
+        $productId = (int) $id;
         
         // Cek kepemilikan produk
-        $product = Product::where('id', $id)
+        $product = Product::where('id', $productId)
             ->where('user_id', $user->id)
             ->first();
             
@@ -159,18 +175,45 @@ class HppController extends Controller
         }
         try {
             DB::beginTransaction();
-            $productId = (int) $id;
-            if($request->has('costs')){
-                ProductCost::where('product_id',$productId)->delete();
-                foreach ($request->costs as $cost) {
+            
+            foreach ($request->costs as $cost) {
+                $amount = ($cost['conversion_qty'] ?? 1) > 0
+                    ? ($cost['unit_price'] / $cost['conversion_qty']) * $cost['quantity']
+                    : $cost['unit_price'] * $cost['quantity'];
+                
+                // Cek apakah ada ID cost, jika ada , jika tidak create baru
+                if (isset($cost['id'])) {
+                    // Pastikan cost ID tersebut terkait dengan product ini
+                    $productCost = ProductCost::where('id', $cost['id'])
+                        ->where('product_id', $productId)
+                        ->first();
+                    
+                    if ($productCost) {
+                        $productCost->update([
+                            'cost_component_id' => $cost['cost_component_id'],
+                            'unit' => $cost['unit'],
+                            'unit_price' => $cost['unit_price'],
+                            'quantity' => $cost['quantity'],
+                            'conversion_qty' => $cost['conversion_qty'],
+                            'amount' => $amount,
+                            'description' => $cost['description'] ?? null,
+                        ]);
+                    }
+                } else {
+                    // Buat biaya baru
                     ProductCost::create([
-                        'product_id' => $id,
+                        'product_id' => $productId,
                         'cost_component_id' => $cost['cost_component_id'],
-                        'amount' => $cost['amount'],
+                        'unit' => $cost['unit'],
+                        'unit_price' => $cost['unit_price'],
+                        'quantity' => $cost['quantity'],
+                        'conversion_qty' => $cost['conversion_qty'],
+                        'amount' => $amount,
                         'description' => $cost['description'] ?? null,
                     ]);
                 }
             }
+            
             $hpp = $this->calculateHpp($productId);
             $product->hpp = $hpp;
             $product->save();
@@ -189,7 +232,6 @@ class HppController extends Controller
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage()
             ], 500);
         }
-        
     }
 
     /**

@@ -15,6 +15,13 @@ class CostComponent extends Model
         'description',
         'component_type',
     ];
+    public const TYPES = [
+        'direct_material',
+        'direct_labor',
+        'overhead',
+        'packaging',
+        'other'
+    ];
 
     public function productCosts()
     {

@@ -43,11 +43,7 @@ class CheckResourceLimit
             $maxCount = $subscription->subscriptionPlan->max_products;
             $currentCount = Product::where('user_id', $user->id)->count();
             $resourceLabel = 'produk';
-        } else { // 'material'
-            $maxCount = $subscription->subscriptionPlan->max_materials;
-            $currentCount = Material::where('user_id', $user->id)->count();
-            $resourceLabel = 'bahan';
-        }
+        } 
         if ($maxCount != -1 && $currentCount >= $maxCount) {
             return response()->json([
                 'success' => false,

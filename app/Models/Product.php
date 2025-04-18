@@ -14,7 +14,6 @@ class Product extends Model
         'name',
         'sku',
         'description',
-        'unit',
         'hpp',
         'selling_price',
     ];
@@ -24,77 +23,70 @@ class Product extends Model
         return $this->belongsTo(User::class);
     }
 
-
     public function costs()
     {
         return $this->hasMany(ProductCost::class);
     }
+
     public function priceSchemas()
     {
         return $this->hasMany(PriceSchema::class);
     }
 
+    public function salesRecords ()
+    {
+        return $this->hasMany(SalesRecord::class);
+    }
     
     public function getHppBreakdownAttribute()
     {
-        $directMaterial = 0;
-        $directLabor = 0;
-        $overhead = 0;
-        $packaging = 0;
-        $other = 0;
+        $categories = [
+            'direct_material' => 0,
+            'direct_labor' => 0,
+            'overhead' => 0,
+            'packaging' => 0,
+            'other' => 0,
+        ];
 
         foreach ($this->costs as $cost) {
-            switch ($cost->costComponent->component_type){
-                case 'direct_material':
-                    $directMaterial += $cost->amount;
-                    break;
-                case 'direct_labor':
-                    $directLabor += $cost->amount;
-                    break;
-                case 'overhead':
-                    $overhead += $cost->amount;
-                    break;
-                case 'packaging':
-                    $packaging += $cost->amount;
-                    break;
-                case 'other':
-                    $other += $cost->amount;
-                    break;
+            $type = $cost->costComponent->component_type ?? 'other';
+            $amount = $cost->calculated_amount ?? $cost->amount;
 
+            if (array_key_exists($type, $categories)) {
+                $categories[$type] += $amount;
+            } else {
+                $categories['other'] += $amount;
             }
         }
-        
-        $totalDirectMaterial = $directMaterial; 
-        $totalHpp = $totalDirectMaterial + $directLabor + $overhead + $packaging + $other;
 
-        $percentageDirectMaterial = $totalHpp > 0 ? ($totalDirectMaterial / $totalHpp) * 100 : 0;
-        $percentageDirectLabor = $totalHpp > 0 ? ($directLabor / $totalHpp) * 100 : 0;
-        $percentageOverhead = $totalHpp > 0 ? ($overhead / $totalHpp) * 100 : 0;
-        $percentagePackaging = $totalHpp > 0 ? ($packaging / $totalHpp) * 100 : 0; 
-        $percentageOther = $totalHpp > 0 ? ($other / $totalHpp) * 100 : 0;
+        $totalHpp = array_sum($categories);
 
-        return [
-            'direct_material' => [
-                'amount' => round($totalDirectMaterial,2),
-                'percentage' => round($percentageDirectMaterial,2)
-            ],
-            'direct_labor' => [
-                'amount' => round($directLabor,2),
-                'percentage' => round($percentageDirectLabor,2)
-            ],
-            'overhead' => [
-                'amount' => round($overhead,2),
-                'percentage' => round($percentageOverhead,2)
-            ],
-            'packaging' => [
-                'amount' => round($packaging,2),
-                'percentage' => round($percentagePackaging,2)
-            ],
-            'other' => [
-                'amount' => round($other,2),
-                'percentage' => round($percentageOther,2)
-            ],
-            'total' => round($totalHpp,2)
-        ];
+        $breakdown = [];
+        foreach ($categories as $type => $amount) {
+            $breakdown[$type] = [
+                'amount' => round($amount, 2),
+                'percentage' => $totalHpp > 0 ? round(($amount / $totalHpp) * 100, 2) : 0
+            ];
+        }
+
+        $breakdown['total'] = round($totalHpp, 2);
+
+        return $breakdown;
     }
+
+    public function getTotalHppAttribute(){
+        return $this->hpp_breakdown['total'];
+    }
+
+    public function getProfitAttribute(){
+        return $this->selling_price - $this->total_hpp;
+    }
+
+    public function getProfitMarginAttributes(){
+        if ($this->selling_price == 0) {
+            return 0;
+        }
+        return round(($this->profit / $this->selling_price) * 100, 2);
+    }
+    
 }

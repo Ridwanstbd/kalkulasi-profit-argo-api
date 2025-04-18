@@ -8,32 +8,24 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\JWTAuth;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
 class PriceSchemeController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index()
     {
         $user = JWTAuth::user();
         
         $query = Product::where('user_id', $user->id);
         
-        if ($request->has('search')) {
-            $query->where(function($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                ->orWhere('code', 'like', '%' . $request->search . '%');
-            });
-        }
-        
         $query->withCount('priceSchemas');
         
         $query->orderBy('created_at', 'desc');
         
-        $perPage = $request->per_page ?? 15;
-        $products = $query->paginate($perPage);
+        $products = $query->get();
         
         return response()->json([
             'success' => true,
@@ -137,7 +129,7 @@ class PriceSchemeController extends Controller
         if(!$priceSchema){
             return response()->json([
                 'success'=> false,
-                'message' => 'Skema harga tidak ditemukan atau bukan milik anda'
+                'message' => 'Skema harga belum ditambahkan untuk produk ini'
             ],404);
         }
         return response()->json([

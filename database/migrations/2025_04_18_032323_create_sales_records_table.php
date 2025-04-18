@@ -11,14 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('cost_components', function (Blueprint $table) {
+        Schema::create('sales_records', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->string('name', 100);
-            $table->text('description')->nullable();
-            $table->enum('component_type', ['direct_material', 'direct_labor', 'overhead', 'packaging', 'other']);
+            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->integer('month');
+            $table->integer('year');
+            $table->integer('number_of_sales');
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+
+            $table->unique(['product_id', 'month', 'year']);
         });
     }
 
@@ -27,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('cost_components');
+        Schema::dropIfExists('sales_records');
     }
 };

@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('cost_components', function (Blueprint $table) {
+        Schema::create('expense_categories', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->string('name', 100);
+            $table->string('name');
             $table->text('description')->nullable();
-            $table->enum('component_type', ['direct_material', 'direct_labor', 'overhead', 'packaging', 'other']);
+            $table->boolean('is_salary')->default(false);
+            $table->integer('order')->default(0);
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
         });
@@ -27,6 +28,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('cost_components');
+        Schema::dropIfExists('expense_categories');
     }
 };
