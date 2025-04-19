@@ -18,7 +18,6 @@ return new class extends Migration
             $table->integer('duration');
             $table->json('features')->nullable();
             $table->integer('max_products')->default(0);
-            $table->integer('max_materials')->default(0);
             $table->timestamps();
         });
     }

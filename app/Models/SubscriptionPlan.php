@@ -15,7 +15,6 @@ class SubscriptionPlan extends Model
         'duration',
         'features',
         'max_products',
-        'max_materials',
     ];
 
     public function userSubscriptions()

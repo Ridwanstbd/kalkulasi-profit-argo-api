@@ -45,7 +45,6 @@ class AdminSubscriptionPlanController extends Controller
             'duration' => 'required|integer|min:1',
             'features' => 'nullable|json',
             'max_products' => 'required|integer',
-            'max_materials' => 'required|integer',
         ]);
 
         if ($validator->fails()) {
@@ -112,7 +111,6 @@ class AdminSubscriptionPlanController extends Controller
             'duration' => 'nullable|integer|min:1',
             'features' => 'nullable|json',
             'max_products' => 'nullable|integer|min:0',
-            'max_materials' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {

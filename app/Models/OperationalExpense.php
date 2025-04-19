@@ -24,7 +24,7 @@ class OperationalExpense extends Model
     protected $casts = [
         'quantity' => 'integer',
         'amount' => 'decimal:2',
-        'conversion_factor' => 'decimal:5',
+        'conversion_factor' => 'integer',
         'total_amount' => 'decimal:2',
     ];
 
