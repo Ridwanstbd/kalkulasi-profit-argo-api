@@ -78,7 +78,7 @@ class ManageUserSubscriptionController extends Controller
     public function update(Request $request, string $id)
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'sometimes|in:active,expired,cancelled',
+            'status' => 'sometimes|in:active,inactive,expired,cancelled',
             'payment_status' => 'sometimes|in:pending,paid,failed,refunded',
         ]);
     
@@ -90,8 +90,7 @@ class ManageUserSubscriptionController extends Controller
         }
         try {
             DB::beginTransaction();
-            $subscriptionId = (int) $id;
-            $subscription = UserSubscription::find($subscriptionId);
+            $subscription = UserSubscription::find($id);
         
             if (!$subscription) {
                 return response()->json([
@@ -100,15 +99,25 @@ class ManageUserSubscriptionController extends Controller
                 ], 404);
             }
             
-            $subscription->payment_status = $request->payment_status;
+            $dataToUpdate = [];
             
-            if ($request->payment_status === 'paid' && $subscription->status !== 'active') {
-                $subscription->status = 'active';
+            if ($request->has('payment_status')) {
+                $dataToUpdate['payment_status'] = $request->payment_status;
+                
+                if ($request->payment_status === 'paid' && $subscription->status !== 'active') {
+                    $dataToUpdate['status'] = 'active';
+                }
+                
+                if ($request->payment_status === 'failed' && $subscription->status !== 'cancelled') {
+                    $dataToUpdate['status'] = 'cancelled';
+                }
             }
             
-            if ($request->payment_status === 'failed' && $subscription->status !== 'cancelled') {
-                $subscription->status = 'cancelled';
+            if ($request->has('status')) {
+                $dataToUpdate['status'] = $request->status;
             }
+            
+            $subscription->update($dataToUpdate);
             DB::commit();
             return response()->json([
                 'success' => true,

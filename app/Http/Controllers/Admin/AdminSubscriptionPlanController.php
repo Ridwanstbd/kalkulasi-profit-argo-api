@@ -15,11 +15,8 @@ class AdminSubscriptionPlanController extends Controller
      */
     public function index(Request $request)
     {
-        $request->validate([
-            'per_page' => 'required'
-        ]);
         try {
-            $plan = SubscriptionPlan::paginate($request->input('per_page',10));
+            $plan = SubscriptionPlan::get();
             return response()->json([
                 'success' => true,
                 'message' => 'Paket berlangganan berhasil ditampilkan!',

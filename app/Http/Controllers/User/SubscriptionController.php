@@ -38,7 +38,6 @@ class SubscriptionController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
-            'payment_method' => 'required|string'
         ]);
         
         if ($validator->fails()) {
@@ -48,35 +47,50 @@ class SubscriptionController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
+        
         try {
             DB::beginTransaction();
             $user = JWTAuth::user();
             $planId = $request->subscription_plan_id;
+            
             $activeSubscription = UserSubscription::where('user_id', $user->id)
-            ->where('status','active')
-            ->where('end_date','>=',Carbon::now()->format('Y-m-d'))
-            ->first();
+                ->where('status', 'active')
+                ->where('end_date', '>=', Carbon::now()->format('Y-m-d'))
+                ->first();
+                
             if ($activeSubscription) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Anda sudah memiliki langganan aktif'
-                ],400);
+                if ($activeSubscription->subscription_plan_id == $planId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Anda sudah memiliki langganan aktif dengan paket yang sama'
+                    ], 400);
+                }
+                
+                $activeSubscription->status = 'cancelled';
+                $activeSubscription->save();
             }
+            
             $plan = SubscriptionPlan::find($planId);
             $startDate = Carbon::now();
-            $endDate = Carbon::now()->addDays($plan->duation);
+            $endDate = Carbon::now()->addDays($plan->duration);
+            
+            if ($request->payment_status === 'paid') {
+                $status = 'active';
+            }
+            
             $subscription = UserSubscription::create([
                 'user_id' => $user->id,
-                'subcription_plan_id' => $planId,
+                'subscription_plan_id' => $planId, 
                 'start_date' => $startDate,
                 'end_date' => $endDate,
-                'status' => 'active',
+                'status' => $status ?? 'inactive',
                 'payment_status' => 'pending'
             ]);            
+            
             DB::commit();
             return response()->json([
                 'success' => true,
-                'message' => 'Berhasil berlangganan',
+                'message' => 'Silakan melanjutkan ke pembayaran langganan',
                 'data' => $subscription
             ], 201);
         } catch (\Exception $e) {
@@ -85,7 +99,7 @@ class SubscriptionController extends Controller
                 'success' => false,
                 'message' => 'Gagal berlangganan',
                 'errors' => $e->getMessage()
-            ],500);
+            ], 500);
         }
     }
 
@@ -95,30 +109,37 @@ class SubscriptionController extends Controller
     public function show(string $id)
     {
         $user = JWTAuth::user();
-        $subscriptionId = (int) $id;
-        $subscription = UserSubscription::where('user_id',$subscriptionId)
-        ->where('status','active')
-        ->where('end_date','>=',Carbon::now()->format('Y-m-d'))
-        ->with('subscriptionPlan')
-        ->first();
+        
+        $subscription = UserSubscription::where('id', (int) $id)
+            ->with('subscriptionPlan')
+            ->first();
+            
+        if (!$subscription) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Langganan tidak ditemukan'
+            ], 404);
+        }
+        
         if ($subscription->user_id !== $user->id && !$user->hasRole('admin')) {
             return response()->json([
                 'success' => false,
                 'message' => 'Anda tidak memiliki akses'
             ], 403);
         }
-        if (!$subscription){
-            return response()->json([
-                'success' => false,
-                'message' => 'Tidak ada langganan aktif'
-            ],404);
+        
+        $isActive = $subscription->status === 'active' && 
+                   Carbon::parse($subscription->end_date)->greaterThanOrEqualTo(Carbon::now());
+        
+        if (!$isActive) {
+            $subscription->status = 'expired';
+            $subscription->save();
         }
         
         return response()->json([
             'success' => true,
-            'data' => $subscription,
-            
-        ],200);
+            'data' => $subscription
+        ], 200);
     }
 
     /**
@@ -130,12 +151,14 @@ class SubscriptionController extends Controller
             DB::beginTransaction();
             $subscriptionId = (int) $id;
             $subscription = UserSubscription::find($subscriptionId);
+            
             if (!$subscription) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Langganan tidak ditemukan'
                 ], 404);
             }
+            
             $user = JWTAuth::user();
             if ($subscription->user_id !== $user->id && !$user->hasRole('admin')) {
                 return response()->json([
@@ -143,6 +166,7 @@ class SubscriptionController extends Controller
                     'message' => 'Anda tidak memiliki akses'
                 ], 403);
             }
+            
             if ($request->has('payment_status')) {
                 $validator = Validator::make($request->all(), [
                     'payment_status' => 'required|in:pending,paid,failed,refunded',
@@ -158,19 +182,28 @@ class SubscriptionController extends Controller
                 
                 $subscription->payment_status = $request->payment_status;
                 
-                // Jika pembayaran berhasil, status langganan menjadi aktif
                 if ($request->payment_status === 'paid') {
+                    $otherActiveSubscriptions = UserSubscription::where('user_id', $user->id)
+                        ->where('id', '!=', $subscriptionId)
+                        ->where('status', 'active')
+                        ->get();
+                    
+                    foreach ($otherActiveSubscriptions as $otherSubscription) {
+                        $otherSubscription->status = 'cancelled';
+                        $otherSubscription->save();
+                    }
+                    
                     $subscription->status = 'active';
-                }
-                
-                // Jika pembayaran gagal, status langganan menjadi dibatalkan
-                if ($request->payment_status === 'failed') {
+                } elseif ($request->payment_status === 'failed') {
                     $subscription->status = 'cancelled';
+                } elseif ($request->payment_status === 'pending') {
+                    $subscription->status = 'inactive';
                 }
             }
+            
             if ($request->has('status')) {
                 $validator = Validator::make($request->all(), [
-                    'status' => 'required|in:active,expired,cancelled',
+                    'status' => 'required|in:active,expired,cancelled,inactive',
                 ]);
                 
                 if ($validator->fails()) {
@@ -181,11 +214,24 @@ class SubscriptionController extends Controller
                     ], 422);
                 }
                 
+                if ($request->status === 'active' && $subscription->status !== 'active') {
+                    $otherActiveSubscriptions = UserSubscription::where('user_id', $user->id)
+                        ->where('id', '!=', $subscriptionId)
+                        ->where('status', 'active')
+                        ->get();
+                    
+                    foreach ($otherActiveSubscriptions as $otherSubscription) {
+                        $otherSubscription->status = 'cancelled';
+                        $otherSubscription->save();
+                    }
+                }
+                
                 $subscription->status = $request->status;
             }
             
             $subscription->save();
             DB::commit();
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Langganan berhasil diperbarui',
@@ -197,7 +243,7 @@ class SubscriptionController extends Controller
                 'success' => false,
                 'message' => 'Gagal memperbarui langganan',
                 'errors' => $e->getMessage()
-            ],500);
+            ], 500);
         }
         
     }
@@ -218,6 +264,7 @@ class SubscriptionController extends Controller
                     'message' => 'Langganan tidak ditemukan'
                 ], 404);
             }
+            
             $user = JWTAuth::user();
             if ($subscription->user_id !== $user->id && !$user->hasRole('admin')) {
                 return response()->json([
@@ -225,8 +272,10 @@ class SubscriptionController extends Controller
                     'message' => 'Anda tidak memiliki akses'
                 ], 403);
             }
+            
             $subscription->status = 'cancelled';
             $subscription->save();
+            
             DB::commit();
             return response()->json([
                 'success' => true,
@@ -236,9 +285,9 @@ class SubscriptionController extends Controller
             DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal berlangganan',
+                'message' => 'Gagal membatalkan langganan',
                 'errors' => $e->getMessage()
-            ],500);
+            ], 500);
         }
     }
 }
