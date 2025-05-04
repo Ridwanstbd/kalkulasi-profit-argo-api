@@ -22,10 +22,19 @@ class ProductController extends Controller
                 'success' => false,
                 'message' => 'Produk tidak ditemukan.'
             ]);
-        } 
+        }
+        $stats = [
+            'total_products' => $products->count(),
+            'avg_selling_price' => $products->avg('selling_price'),
+            'avg_hpp' => $products->avg('hpp'),
+            'total_selling_value' => $products->sum('selling_price'),
+            'total_hpp_value' => $products->sum('hpp'),
+            'profit_margin' => $products->sum('selling_price') - $products->sum('hpp')
+        ];
         return response()->json([
             'success' => true,
             'message' => 'Produk ditemukan',
+            'stats' => $stats,
             'data' => $products
         ],200);
     }
