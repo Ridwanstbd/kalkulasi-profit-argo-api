@@ -23,7 +23,7 @@ class HppController extends Controller
         ->get();
         if($products->isEmpty()){
             return response()->json([
-                'success' => true,
+                'success' => false,
                 'message' => 'Produk yang terhubung masih kosong'
             ]);
         }

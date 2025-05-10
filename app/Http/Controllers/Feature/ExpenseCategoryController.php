@@ -19,7 +19,6 @@ class ExpenseCategoryController extends Controller
         $user = JWTAuth::user();
         $categories = ExpenseCategory::with('operationalExpenses')
             ->where('user_id',$user->id)
-            ->orderBy('order')
             ->get();
 
         $categories->each(function ($category) {
@@ -50,7 +49,6 @@ class ExpenseCategoryController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'is_salary' => 'required|boolean',
-            'order' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -60,11 +58,6 @@ class ExpenseCategoryController extends Controller
             ], 422);
         }
 
-        // Jika order tidak diisi, gunakan order terbesar + 1
-        if (!$request->has('order') || $request->order === null) {
-            $maxOrder = ExpenseCategory::max('order') ?? 0;
-            $request->merge(['order' => $maxOrder + 1]);
-        }
         $user = JWTAuth::user();
 
         $category = ExpenseCategory::create([
@@ -72,7 +65,6 @@ class ExpenseCategoryController extends Controller
             'name' => $request['name'],
             'description' => $request['description'],
             'is_salary' => $request['is_salary'],
-            'order' => $request['order'],
         ]);
 
         return response()->json([
@@ -134,7 +126,6 @@ class ExpenseCategoryController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'description' => 'nullable|string',
             'is_salary' => 'sometimes|required|boolean',
-            'order' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('user_id');
             $table->string('name', 100);
-            $table->string('sku', 50);
+            $table->string('sku', 12)->unique();
             $table->text('description')->nullable();
             $table->decimal('hpp', 12, 2)->default(0);
             $table->decimal('selling_price', 12, 2)->default(0);

@@ -49,7 +49,6 @@ class ProductController extends Controller
             'name' => 'required|string|max:100',
             'sku' => 'required|string|max:50',
             'description' => 'nullable|string',
-            'unit' => 'required|string',
             'hpp' => 'nullable|numeric',
             'selling_price' => 'nullable|numeric',
         ]);
@@ -128,7 +127,6 @@ class ProductController extends Controller
             'name' => 'string|max:100',
             'sku' => 'string|max:50',
             'description' => 'nullable|string',
-            'unit' => 'string',
             'hpp' => 'numeric',
             'selling_price' => 'numeric',
         ]);

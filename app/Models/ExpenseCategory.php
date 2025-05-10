@@ -13,7 +13,6 @@ class ExpenseCategory extends Model
         'name',
         'description',
         'is_salary',
-        'order',
         'user_id'
     ];
 
