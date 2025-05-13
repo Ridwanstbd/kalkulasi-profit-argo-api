@@ -17,14 +17,12 @@ return new class extends Migration
             $table->unsignedBigInteger('cost_component_id');
             $table->string('unit',10);                    
             $table->decimal('unit_price', 12, 2);    
-            $table->integer('quantity');        
-            $table->integer('conversion_qty'); 
+            $table->decimal('quantity',8,2);        
+            $table->decimal('conversion_qty',8,2); 
             $table->decimal('amount', 12, 2);
-            $table->text('description')->nullable();
             $table->timestamps();
             $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
             $table->foreign('cost_component_id')->references('id')->on('cost_components');
-            $table->unique(['cost_component_id']);        
         });
     }
 

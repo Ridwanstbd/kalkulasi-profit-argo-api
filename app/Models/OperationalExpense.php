@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,20 +13,20 @@ class OperationalExpense extends Model
     protected $fillable = [
         'user_id',
         'expense_category_id',
-        'name',
         'quantity',
         'unit',
         'amount',
-        'conversion_factor',
-        'conversion_unit',
+        'year',
+        'month',
         'total_amount',
     ];
 
     protected $casts = [
         'quantity' => 'integer',
         'amount' => 'decimal:2',
-        'conversion_factor' => 'integer',
         'total_amount' => 'decimal:2',
+        'year' => 'integer',
+        'month' => 'integer'
     ];
 
     /**
@@ -44,82 +45,150 @@ class OperationalExpense extends Model
         parent::boot();
 
         static::saving(function ($expense) {
-            $expense->total_amount = $expense->quantity * $expense->amount * $expense->conversion_factor;
+            $conversionFactor = 1;
+            if (strtolower($expense->unit) === 'minggu') {
+                $conversionFactor = 4; 
+            }
+            
+            $expense->total_amount = $expense->quantity * $expense->amount * $conversionFactor;
+            
+            if (empty($expense->year)) {
+                $expense->year = Carbon::now()->year;
+            }
+            
+            if (empty($expense->month)) {
+                $expense->month = Carbon::now()->month;
+            }
         });
     }
 
     /**
      * Get all expenses grouped by category
      */
-    public static function getExpensesByCategory()
+    public static function getExpensesByCategory($year = null, $month = null)
     {
-        return static::with('category')
-            ->orderBy('expense_category_id')
-            ->get()
+        $query = static::with('category')
+            ->orderBy('expense_category_id');
+            
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->get()
             ->groupBy('expense_category_id');
     }
 
     /**
      * Get all salary expenses
      */
-    public static function getSalaryExpenses()
+    public static function getSalaryExpenses($year = null, $month = null)
     {
-        return static::with('category')
+        $query = static::with('category')
             ->whereHas('category', function ($query) {
                 $query->where('is_salary', true);
-            })
-            ->get();
+            });
+            
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->get();
     }
 
     /**
      * Get all operational (non-salary) expenses
      */
-    public static function getOperationalExpenses()
+    public static function getOperationalExpenses($year = null, $month = null)
     {
-        return static::with('category')
+        $query = static::with('category')
             ->whereHas('category', function ($query) {
                 $query->where('is_salary', false);
-            })
-            ->get();
+            });
+            
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->get();
     }
 
     /**
      * Get total salary expenses
      */
-    public static function getTotalSalaryExpenses()
+    public static function getTotalSalaryExpenses($year = null, $month = null)
     {
-        return static::whereHas('category', function ($query) {
+        $query = static::whereHas('category', function ($query) {
                 $query->where('is_salary', true);
-            })
-            ->sum('total_amount');
+            });
+            
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->sum('total_amount');
     }
 
     /**
      * Get total operational (non-salary) expenses
      */
-    public static function getTotalOperationalExpenses()
+    public static function getTotalOperationalExpenses($year = null, $month = null)
     {
-        return static::whereHas('category', function ($query) {
+        $query = static::whereHas('category', function ($query) {
                 $query->where('is_salary', false);
-            })
-            ->sum('total_amount');
+            });
+            
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->sum('total_amount');
     }
 
     /**
      * Get grand total of all expenses
      */
-    public static function getGrandTotal()
+    public static function getGrandTotal($year = null, $month = null)
     {
-        return static::sum('total_amount');
+        $query = static::query();
+        
+        if ($year) {
+            $query->where('year', $year);
+        }
+        
+        if ($month) {
+            $query->where('month', $month);
+        }
+        
+        return $query->sum('total_amount');
     }
 
     /**
      * Get complete summary of expenses
      */
-    public static function getSummary()
+    public static function getSummary($year = null, $month = null)
     {
-        $categories = ExpenseCategory::orderBy('order')->get();
-        $expensesByCategory = static::getExpensesByCategory();
+        $categories = ExpenseCategory::get();
+        $expensesByCategory = static::getExpensesByCategory($year, $month);
         
         $summary = [];
         $totalSalary = 0;
@@ -149,7 +218,38 @@ class OperationalExpense extends Model
             'total_salary' => $totalSalary,
             'total_operational' => $totalOperational,
             'grand_total' => $totalSalary + $totalOperational,
-            'total_employees' => $totalEmployees
+            'total_employees' => $totalEmployees,
+            'year' => $year,
+            'month' => $month
         ];
+    }
+
+    public static function getAvailableYears($userId = null)
+    {
+        $query = static::select('year')
+            ->distinct();
+            
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+        
+        return $query->orderBy('year')
+            ->pluck('year')
+            ->toArray();
+    }
+
+    public static function getAvailableMonths($year, $userId = null)
+    {
+        $query = static::select('month')
+            ->where('year', $year)
+            ->distinct();
+            
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+        
+        return $query->orderBy('month')
+            ->pluck('month')
+            ->toArray();
     }
 }

@@ -17,6 +17,7 @@ class CostComponent extends Model
     ];
     public const TYPES = [
         'direct_material',
+        'indirect_material',
         'direct_labor',
         'overhead',
         'packaging',

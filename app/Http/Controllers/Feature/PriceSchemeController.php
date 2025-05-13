@@ -15,23 +15,41 @@ class PriceSchemeController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = JWTAuth::user();
-        
-        $query = Product::where('user_id', $user->id);
-        
-        $query->withCount('priceSchemas');
-        
-        $query->orderBy('created_at', 'desc');
-        
-        $products = $query->get();
-        
+        $userProducts = Product::where('user_id', $user->id)->get();
+
+        if ($userProducts->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Produk yang terhubung masih kosong'
+            ]);
+        }
+
+        $productId = $request->input('product_id', $userProducts->first()->id);
+
+        $product = $userProducts->firstWhere('id', $productId);
+
+        if (!$product) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Produk tidak ditemukan atau tidak dimiliki oleh user'
+            ]);
+        }
+
+        $priceSchemas = PriceSchema::where('user_id', $user->id)
+            ->where('product_id', $product->id)
+            ->with(['product'])
+            ->get();
+
         return response()->json([
             'success' => true,
-            'message' => 'Daftar produk',
-            'data' => $products
-        ], 200);
+            'message' => 'Daftar skema harga berhasil ditampilkan',
+            'data' => $priceSchemas,
+            'product' => $product,
+            'all_products' => $userProducts
+        ]);
     }
 
     /**
@@ -42,10 +60,9 @@ class PriceSchemeController extends Controller
         $validator = Validator::make($request->all(), [
             'product_id' => 'required|exists:products,id',
             'level_name' => 'required|string|max:100',
-            'level_order' => 'required|numeric',
             'discount_percentage' => 'nullable',
             'selling_price' => 'nullable',
-            'purchase_price' => 'required|numeric|min:0',
+            'purchase_price' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
         
@@ -71,34 +88,60 @@ class PriceSchemeController extends Controller
         
         try {
             DB::beginTransaction();
+            
+            $maxLevelOrder = PriceSchema::where('user_id', $user->id)
+                            ->where('product_id', $productId)
+                            ->max('level_order') ?? 0;
+            
+            $nextLevelOrder = $maxLevelOrder + 1;
+            
+            $purchasePrice = null;
+            
+            if ($nextLevelOrder == 1) {
+                $purchasePrice = $product->hpp ?? $request->purchase_price;
+            } else {
+                $previousSchema = PriceSchema::where('user_id', $user->id)
+                                ->where('product_id', $productId)
+                                ->where('level_order', $maxLevelOrder)
+                                ->first();
+                
+                if ($previousSchema) {
+                    $purchasePrice = $previousSchema->selling_price;
+                } else {
+                    $purchasePrice = $request->purchase_price ?? $product->hpp;
+                }
+            }
+            
+            if ($purchasePrice === null) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Harga pembelian (purchase price) diperlukan untuk skema harga pertama'
+                ], 422);
+            }
+            
             $discountPercentage = null;
             $sellingPrice = null;
             $profitAmount = null;
 
-            // Menentukan nilai diskon dan harga jual berdasarkan input
             if($request->discount_percentage) {
-                // Jika diskon diisi, hitung harga jual
                 $discountPercentage = $request->discount_percentage;
-                $sellingPrice = $this->calculateSellingPrice($request->purchase_price, $discountPercentage);
+                $sellingPrice = $this->calculateSellingPrice($purchasePrice, $discountPercentage);
             } elseif($request->selling_price) {
-                // Jika harga jual diisi, hitung diskon
                 $sellingPrice = $request->selling_price;
-                $discountPercentage = $this->calculateDiscountPercentage($request->purchase_price, $sellingPrice);
+                $discountPercentage = $this->calculateDiscountPercentage($purchasePrice, $sellingPrice);
             } else {
-                // Jika keduanya tidak diisi, gunakan default (misalnya diskon 0%)
                 $discountPercentage = 0;
-                $sellingPrice = $this->calculateSellingPrice($request->purchase_price, $discountPercentage);
+                $sellingPrice = $this->calculateSellingPrice($purchasePrice, $discountPercentage);
             }
             
-            // Hitung profit amount
-            $profitAmount = $sellingPrice - $request->purchase_price;
+            $profitAmount = $sellingPrice - $purchasePrice;
             $priceSchema = PriceSchema::create([
                 'user_id' => $user->id,
                 'product_id' => $productId,
                 'level_name' => $request->level_name,
-                'level_order' => $request->level_order,
+                'level_order' => $nextLevelOrder, 
                 'discount_percentage' => $discountPercentage,
-                'purchase_price' => $request->purchase_price,
+                'purchase_price' => $purchasePrice,
                 'selling_price' => $sellingPrice,
                 'profit_amount' => $profitAmount,
                 'notes' => $request->notes
@@ -172,16 +215,36 @@ class PriceSchemeController extends Controller
                 'message' => 'Skema harga tidak ditemukan atau bukan milik anda'
             ], 404);
         }
+        
         try {
-            DB::beginTransaction();
-            $purchasePrice = $request->has('purchase_price') ? $request->purchase_price : $priceSchema->purchase_price;
+            $purchasePrice = $priceSchema->purchase_price;
+            
+            if ($request->has('purchase_price') && $priceSchema->level_order == 1) {
+                $purchasePrice = $request->purchase_price;
+            } elseif ($request->has('level_order') && $request->level_order != $priceSchema->level_order) {
+                $newLevelOrder = $request->level_order;
+                
+                if ($newLevelOrder == 1) {
+                    $product = Product::find($priceSchema->product_id);
+                    $purchasePrice = $product ? $product->hpp : $priceSchema->purchase_price;
+                } else {
+                    $previousSchema = PriceSchema::where('user_id', $user->id)
+                                    ->where('product_id', $priceSchema->product_id)
+                                    ->where('level_order', $newLevelOrder - 1)
+                                    ->first();
+                    
+                    if ($previousSchema) {
+                        $purchasePrice = $previousSchema->selling_price;
+                    }
+                }
+            }
 
             $discountPercentage = $priceSchema->discount_percentage;
             $sellingPrice = $priceSchema->selling_price;
 
             if($request->has('discount_percentage') && !$request->has('selling_price')){
                 $discountPercentage = $request->discount_percentage;
-                $sellingPrice = $this->calculateSellingPrice($purchasePrice,$discountPercentage);
+                $sellingPrice = $this->calculateSellingPrice($purchasePrice, $discountPercentage);
             }elseif(!$request->has('discount_percentage') && $request->has('selling_price')) {
                 $sellingPrice = $request->selling_price;
                 $discountPercentage = $this->calculateDiscountPercentage($purchasePrice, $sellingPrice);
@@ -189,6 +252,7 @@ class PriceSchemeController extends Controller
                 $discountPercentage = $request->discount_percentage;
                 $sellingPrice = $this->calculateSellingPrice($purchasePrice, $discountPercentage);
             }
+            
             $profitAmount = $sellingPrice - $purchasePrice;
             $updateData = [
                 'discount_percentage' => $discountPercentage,
@@ -200,24 +264,67 @@ class PriceSchemeController extends Controller
             if($request->has('level_name')) {
                 $updateData['level_name'] = $request->level_name;
             }
+        
+            $oldLevelOrder = $priceSchema->level_order;
+            $newLevelOrder = $request->level_order;
             
-            if($request->has('level_order')) {
-                $updateData['level_order'] = $request->level_order;
+            if($request->has('level_order') && $newLevelOrder != $oldLevelOrder) {
+                $maxLevel = PriceSchema::where('user_id', $user->id)
+                                ->where('product_id', $priceSchema->product_id)
+                                ->count();
+                
+                $newLevelOrder = max(1, min($newLevelOrder, $maxLevel));
+                $updateData['level_order'] = $newLevelOrder;
+                
+                if ($newLevelOrder > $oldLevelOrder) {
+                    PriceSchema::where('user_id', $user->id)
+                        ->where('product_id', $priceSchema->product_id)
+                        ->whereBetween('level_order', [$oldLevelOrder + 1, $newLevelOrder])
+                        ->decrement('level_order');
+                } else {
+                    PriceSchema::where('user_id', $user->id)
+                        ->where('product_id', $priceSchema->product_id)
+                        ->whereBetween('level_order', [$newLevelOrder, $oldLevelOrder - 1])
+                        ->increment('level_order');
+                }
+                
+                $nextLevelSchema = PriceSchema::where('user_id', $user->id)
+                                ->where('product_id', $priceSchema->product_id)
+                                ->where('level_order', $newLevelOrder + 1)
+                                ->first();
+                
+                if ($nextLevelSchema) {
+                    $nextLevelSchema->purchase_price = $sellingPrice;
+                    $nextLevelSchema->profit_amount = $nextLevelSchema->selling_price - $sellingPrice;
+                    $nextLevelSchema->save();
+                }
             }
             
             if($request->has('notes')) {
                 $updateData['notes'] = $request->notes;
             }
+            
             $priceSchema->update($updateData);
-
-            DB::commit();
+            
+            if ($sellingPrice != $priceSchema->getOriginal('selling_price')) {
+                $nextSchema = PriceSchema::where('user_id', $user->id)
+                            ->where('product_id', $priceSchema->product_id)
+                            ->where('level_order', $priceSchema->level_order + 1)
+                            ->first();
+                
+                if ($nextSchema) {
+                    $nextSchema->purchase_price = $sellingPrice;
+                    $nextSchema->profit_amount = $nextSchema->selling_price - $sellingPrice;
+                    $nextSchema->save();
+                }
+            }
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Skema harga berhasil diperbarui',
                 'data' => $priceSchema->fresh()
             ], 200);
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Skema harga gagal diperbarui',
@@ -246,35 +353,50 @@ class PriceSchemeController extends Controller
         try {
             DB::beginTransaction();
             $productId = $priceSchema->product_id;
-            $currentLevelOrder = $priceSchema->level_order;
-            $maxLevelOrder = PriceSchema::where('product_id', $productId)
-                        ->where('user_id', $user->id)
-                        ->max('level_order');
+            $deletedLevelOrder = $priceSchema->level_order;
+            
+            $nextSchema = PriceSchema::where('user_id', $user->id)
+                        ->where('product_id', $productId)
+                        ->where('level_order', $deletedLevelOrder + 1)
+                        ->first();
+            
+            $previousSchema = PriceSchema::where('user_id', $user->id)
+                        ->where('product_id', $productId)
+                        ->where('level_order', $deletedLevelOrder - 1)
+                        ->first();
+            
             $priceSchema->delete();
-            if ($currentLevelOrder == 1 || $currentLevelOrder < $maxLevelOrder) {
-                $remainingSchemas = PriceSchema::where('product_id', $productId)
-                                  ->where('user_id', $user->id)
-                                  ->orderBy('level_order', 'asc')
-                                  ->get();
+            
+            PriceSchema::where('user_id', $user->id)
+                ->where('product_id', $productId)
+                ->where('level_order', '>', $deletedLevelOrder)
+                ->decrement('level_order');
+            
+            if ($nextSchema && $previousSchema) {
+                $nextSchema->purchase_price = $previousSchema->selling_price;
+                $nextSchema->profit_amount = $nextSchema->selling_price - $previousSchema->selling_price;
                 
-                if ($remainingSchemas->count() > 0) {
-                    foreach ($remainingSchemas as $schema) {
-                        $schema->selling_price = $this->calculateSellingPrice(
-                            $schema->purchase_price, 
-                            $schema->discount_percentage
-                        );
-                        
-                        $schema->discount_percentage = $this->calculateDiscountPercentage(
-                            $schema->purchase_price, 
-                            $schema->selling_price
-                        );
-                        
-                        $schema->profit_amount = $schema->selling_price - $schema->purchase_price;
-                        
-                        $schema->save();
-                    }
+                $nextSchema->discount_percentage = $this->calculateDiscountPercentage(
+                    $previousSchema->selling_price, 
+                    $nextSchema->selling_price
+                );
+                
+                $nextSchema->save();
+            } else if ($nextSchema && !$previousSchema && $deletedLevelOrder == 1) {
+                $product = Product::find($productId);
+                if ($product) {
+                    $nextSchema->purchase_price = $product->hpp;
+                    $nextSchema->profit_amount = $nextSchema->selling_price - $product->hpp;
+                    
+                    $nextSchema->discount_percentage = $this->calculateDiscountPercentage(
+                        $product->hpp, 
+                        $nextSchema->selling_price
+                    );
+                    
+                    $nextSchema->save();
                 }
             }
+            
             DB::commit();
             return response()->json([
                 'success' => true,

@@ -29,22 +29,30 @@ class PriceSchemaObserver
     public function deleted(PriceSchema $priceSchema): void
     {
         $this->updateProductSellingPrice($priceSchema);
-    }   
+    }
 
+    /**
+     * Update the product's selling price based on the highest level order schema
+     */
     private function updateProductSellingPrice(PriceSchema $priceSchema): void
     {
-        // Get the product ID
         $productId = $priceSchema->product_id;
         
-        // Find the highest selling price for this product
-        $highestSellingPrice = PriceSchema::where('product_id', $productId)
-            ->max('selling_price');
+        $highestLevelSchema = PriceSchema::where('product_id', $productId)
+            ->orderBy('level_order', 'desc')
+            ->first();
         
-        // Update the product's selling price
-        if ($highestSellingPrice) {
+        if ($highestLevelSchema) {
             Product::where('id', $productId)->update([
-                'selling_price' => $highestSellingPrice
+                'selling_price' => $highestLevelSchema->selling_price
             ]);
+        } else {
+            $product = Product::find($productId);
+            if ($product) {
+                $product->update([
+                    'selling_price' => $product->hpp ?? null
+                ]);
+            }
         }
     }
 }

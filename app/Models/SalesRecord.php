@@ -15,6 +15,8 @@ class SalesRecord extends Model
         'month',
         'year',
         'number_of_sales',
+        'hpp',
+        'selling_price'
     ];
 
     public function product()

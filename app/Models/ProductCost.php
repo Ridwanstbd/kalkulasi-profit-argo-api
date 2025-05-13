@@ -13,7 +13,6 @@ class ProductCost extends Model
         'product_id',
         'cost_component_id',
         'amount',
-        'description',
         'unit', // satuan koversi contoh 'm', 'pcs'
         'unit_price', // harga per satuan beli
         'quantity', // kebutuhan untuk produk (misal 3m, 1pc)

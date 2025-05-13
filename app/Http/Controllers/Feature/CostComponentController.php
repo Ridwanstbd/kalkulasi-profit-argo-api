@@ -22,7 +22,7 @@ class CostComponentController extends Controller
         
         if ($request->has('type')) {
             $type = $request->query('type');
-            $validTypes = ['direct_material', 'direct_labor', 'overhead', 'packaging', 'other'];
+            $validTypes = ['direct_material', 'indirect_material','direct_labor', 'overhead', 'packaging', 'other'];
             
             if (!in_array($type, $validTypes)) {
                 return response()->json([
@@ -81,7 +81,7 @@ class CostComponentController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
-            'component_type' => 'required|in:direct_material,direct_labor,overhead,packaging,other',
+            'component_type' => 'required|in:direct_material,indirect_material,direct_labor,overhead,packaging,other',
         ]);
 
         if ($validator->fails()) {
@@ -143,7 +143,7 @@ class CostComponentController extends Controller
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:100',
             'description' => 'nullable|string',
-            'component_type' => 'sometimes|required|in:direct_material,direct_labor,overhead,packaging,other',
+            'component_type' => 'sometimes|required|in:direct_material,indirect_material,direct_labor,overhead,packaging,other',
         ]);
 
         if ($validator->fails()) {

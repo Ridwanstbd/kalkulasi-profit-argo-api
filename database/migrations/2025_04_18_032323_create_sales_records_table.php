@@ -18,9 +18,10 @@ return new class extends Migration
             $table->integer('month');
             $table->integer('year');
             $table->integer('number_of_sales');
+            $table->decimal('hpp', 15, 2);
+            $table->decimal('selling_price', 15, 2);
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-
             $table->unique(['product_id', 'month', 'year']);
         });
     }

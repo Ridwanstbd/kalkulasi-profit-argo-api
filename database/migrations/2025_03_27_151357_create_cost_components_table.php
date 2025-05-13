@@ -16,7 +16,7 @@ return new class extends Migration
             $table->unsignedBigInteger('user_id');
             $table->string('name', 100);
             $table->text('description')->nullable();
-            $table->enum('component_type', ['direct_material', 'direct_labor', 'overhead', 'packaging', 'other']);
+            $table->enum('component_type', ['direct_material','indirect_material', 'direct_labor', 'overhead', 'packaging', 'other']);
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
         });
