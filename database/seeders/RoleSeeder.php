@@ -20,10 +20,5 @@ class RoleSeeder extends Seeder
             'updated_at' => now(),
         ]);
 
-        Role::create([
-            'name' => 'user',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
     }
 }
