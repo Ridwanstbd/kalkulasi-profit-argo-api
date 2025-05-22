@@ -5,12 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class ProductCost extends Model
+class ProjectCost extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'product_id',
+        'project_id',
         'cost_component_id',
         'amount',
         'unit', // satuan koversi contoh 'm', 'pcs'
@@ -19,9 +19,9 @@ class ProductCost extends Model
         'conversion_qty' // jumlah konversi dari satuan beli (misal 90m dalam 1 roll)
     ];
 
-    public function product()
+    public function project()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Project::class);
     }
 
     public function costComponent()

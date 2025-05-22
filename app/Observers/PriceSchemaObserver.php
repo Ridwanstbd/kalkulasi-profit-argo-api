@@ -3,7 +3,7 @@
 namespace App\Observers;
 
 use App\Models\PriceSchema;
-use App\Models\Product;
+use App\Models\Project;
 
 class PriceSchemaObserver
 {
@@ -12,7 +12,7 @@ class PriceSchemaObserver
      */
     public function created(PriceSchema $priceSchema): void
     {
-        $this->updateProductSellingPrice($priceSchema);
+        $this->updateprojectSellingPrice($priceSchema);
     }
 
     /**
@@ -20,7 +20,7 @@ class PriceSchemaObserver
      */
     public function updated(PriceSchema $priceSchema): void
     {
-        $this->updateProductSellingPrice($priceSchema);
+        $this->updateprojectSellingPrice($priceSchema);
     }
 
     /**
@@ -28,29 +28,29 @@ class PriceSchemaObserver
      */
     public function deleted(PriceSchema $priceSchema): void
     {
-        $this->updateProductSellingPrice($priceSchema);
+        $this->updateprojectSellingPrice($priceSchema);
     }
 
     /**
-     * Update the product's selling price based on the highest level order schema
+     * Update the project's selling price based on the highest level order schema
      */
-    private function updateProductSellingPrice(PriceSchema $priceSchema): void
+    private function updateprojectSellingPrice(PriceSchema $priceSchema): void
     {
-        $productId = $priceSchema->product_id;
+        $projectId = $priceSchema->project_id;
         
-        $highestLevelSchema = PriceSchema::where('product_id', $productId)
+        $highestLevelSchema = PriceSchema::where('project_id', $projectId)
             ->orderBy('level_order', 'desc')
             ->first();
         
         if ($highestLevelSchema) {
-            Product::where('id', $productId)->update([
+            Project::where('id', $projectId)->update([
                 'selling_price' => $highestLevelSchema->selling_price
             ]);
         } else {
-            $product = Product::find($productId);
-            if ($product) {
-                $product->update([
-                    'selling_price' => $product->hpp ?? null
+            $project = Project::find($projectId);
+            if ($project) {
+                $project->update([
+                    'selling_price' => $project->hpp ?? null
                 ]);
             }
         }

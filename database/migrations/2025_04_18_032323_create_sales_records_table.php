@@ -14,15 +14,13 @@ return new class extends Migration
         Schema::create('sales_records', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->foreignId('product_id')->constrained()->onDelete('cascade');
+            $table->foreignId('project_id')->constrained()->onDelete('cascade');
             $table->integer('month');
             $table->integer('year');
-            $table->integer('number_of_sales');
             $table->decimal('hpp', 15, 2);
             $table->decimal('selling_price', 15, 2);
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->unique(['product_id', 'month', 'year']);
         });
     }
 

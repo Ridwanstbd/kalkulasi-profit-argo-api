@@ -41,8 +41,8 @@ class OperationalExpenseSeeder extends Seeder
     {
         ExpenseCategory::create([
             'user_id' => $user->id,
-            'name' => 'Gaji Pelayan',
-            'description' => 'Biaya gaji pelayan',
+            'name' => 'Gaji Karyawan',
+            'description' => 'Biaya gaji Karyawan',
             'is_salary' => true,
         ]);
 

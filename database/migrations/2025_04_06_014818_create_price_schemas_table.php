@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('price_schemas', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('product_id');
+            $table->unsignedBigInteger('project_id');
             $table->string('level_name',100);
             $table->integer('level_order');
             $table->decimal('discount_percentage',5,2);
@@ -24,9 +24,9 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
+            $table->foreign('project_id')->references('id')->on('projects')->onDelete('cascade');
 
-            $table->unique(['product_id', 'level_order']);
+            $table->unique(['project_id', 'level_order']);
         });
     }
 
