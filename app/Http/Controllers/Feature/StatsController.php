@@ -8,14 +8,11 @@ use App\Models\SalesRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class StatsController extends Controller
 {
     public function stats(Request $request)
     {
-        $user = JWTAuth::user();
-        
         $year = $request->input('year', Carbon::now()->year);
         $month = $request->input('month', Carbon::now()->month);
         
@@ -24,30 +21,30 @@ class StatsController extends Controller
             return $validationResult;
         }
         
-        $availableYears = SalesRecord::where('user_id', $user->id)
-            ->selectRaw('DISTINCT year')
+        $year = (int) $year;
+        $month = $month ? (int) $month : null;
+        
+        $availableYears = SalesRecord::selectRaw('DISTINCT year')
             ->orderBy('year', 'desc')
             ->pluck('year')
             ->toArray();
         
-        $availableMonths = SalesRecord::where('user_id', $user->id)
-            ->where('year', $year)
+        $availableMonths = SalesRecord::where('year', $year)
             ->selectRaw('DISTINCT month')
             ->orderBy('month', 'asc')
             ->pluck('month')
             ->toArray();
         
-        $salesRecords = SalesRecord::where('user_id', $user->id)
-            ->where('year', $year)
+        $salesRecords = SalesRecord::where('year', $year)
             ->where('month', $month)
             ->get();
         
         $totalSales = $salesRecords->sum(function ($record) {
-            return $record->number_of_sales * $record->selling_price;
+            return $record->selling_price;
         });
         
         $totalVariableCost = $salesRecords->sum(function ($record) {
-            return $record->number_of_sales * $record->hpp;
+            return $record->hpp;
         });
         
         $totalOperationalCost = OperationalExpense::getTotalOperationalExpenses($year, $month);
@@ -76,7 +73,7 @@ class StatsController extends Controller
         ]);
     }
 
-    private function validateIndexParams(int $year, ?int $month)
+    private function validateIndexParams($year, $month)
     {
         $validator = Validator::make([
             'year' => $year,

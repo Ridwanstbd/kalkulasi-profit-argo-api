@@ -14,33 +14,12 @@ class OperationalExpenseSeeder extends Seeder
      */
     public function run(): void
     {
-        $users = User::all();
-        
-        if ($users->isEmpty()) {
-            $this->command->info('Tidak ada pengguna yang ditemukan dalam database. Silakan jalankan UserSeeder terlebih dahulu.');
-            return;
-        }
-
-        $count = 0;
-
-        foreach ($users as $user) {
-            // Periksa apakah pengguna sudah memiliki komponen biaya
-            $existingComponents = ExpenseCategory::where('user_id', $user->id)->count();
-            
-            if ($existingComponents == 0) {
-                $this->createExpenseCategoryForUser($user);
-                $count++;
-            }
-        }
-
-        $this->command->info("Berhasil membuat komponen biaya untuk {$count} pengguna baru.");
-
+        //
     }
 
     public function createExpenseCategoryForUser(User $user)
     {
         ExpenseCategory::create([
-            'user_id' => $user->id,
             'name' => 'Gaji Karyawan',
             'description' => 'Biaya gaji Karyawan',
             'is_salary' => true,
@@ -83,7 +62,6 @@ class OperationalExpenseSeeder extends Seeder
 
         foreach ($operationalCategories as $catData) {
             ExpenseCategory::create([
-                'user_id' => $user->id,
                 'name' => $catData['name'],
                 'is_salary' => false,
             ]);

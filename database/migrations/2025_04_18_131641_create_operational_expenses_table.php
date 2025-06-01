@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('operational_expenses', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('user_id');
             $table->foreignId('expense_category_id')->constrained()->onDelete('cascade');
             $table->integer('quantity');
             $table->string('unit');
@@ -22,8 +21,7 @@ return new class extends Migration
             $table->unsignedTinyInteger('month');
             $table->decimal('total_amount', 15, 2);
             $table->timestamps();
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->index(['user_id', 'year', 'month']);
+            $table->index([ 'year', 'month']);
         });
     }
 

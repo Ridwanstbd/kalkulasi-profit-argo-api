@@ -2,11 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Role;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
-use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Validator;
@@ -15,48 +12,6 @@ use Tymon\JWTAuth\Exceptions\JWTException;
 
 class JWTAuthController extends Controller
 {
-    public function register(Request $request) {
-        $validator = Validator::make($request->all(),[
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
-            'password_confirmation' => 'required|string|min:6'
-        ]);
-        
-        if ($validator->fails()){
-            return response()->json($validator->errors()->toJson(),400);
-        }
-        try {
-            DB::beginTransaction();
-
-            $user = User::create([
-                'name' => $request->get('name'),
-                'email' => $request->get('email'),
-                'password' => Hash::make($request->password),
-            ]);
-            $userRole = Role::where('name','user')->first();
-            $user->roles()->attach($userRole);
-
-            DB::commit();
-
-            $token = JWTAuth::fromUser($user);
-            return response()->json([
-                'success' => true,
-                'message' => 'User registered successfully',
-                'data' => [
-                    'user' => $user,
-                    'token' => $token
-                ]
-            ], 201);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Registration failed',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
     public function login(Request $request) {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
@@ -69,14 +24,16 @@ class JWTAuthController extends Controller
                 'success' => false,
                 'message' => 'Validasi error',
                 'errors' => $validator->errors()
-            ], 400);
+            ], 422);
         }
         try {
-            $credentials = $request->only('email', 'password');
+            $ttl = $request->remember_me ? config('jwt.refresh_ttl') : config('jwt.ttl');
+            $credentials = [
+                'email' => strtolower($request->email),
+                'password' => $request->password
+            ];
             $remember = $request->input('remember_me', false);
-            if($request->remember_me) {
-                config(['jwt.ttl' => 10080]);
-            }          
+                      
             if (!$token = JWTAuth::attempt($credentials)) {
                 return response()->json([
                     'success' => false,
@@ -88,7 +45,7 @@ class JWTAuthController extends Controller
                 $user->remember_token = hash('sha256', $token);
                 $user->save();
             }
-            $ttl = config('jwt.ttl');
+            
            
             return response()->json([
                 'success' => true,
@@ -97,8 +54,6 @@ class JWTAuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'roles' => $user->roles->pluck('name'),
-                    'is_admin' => $user->isAdmin()
                 ],
                 'authorization' => [
                     'token' => $token,
@@ -260,8 +215,6 @@ class JWTAuthController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'roles' => $user->roles->pluck('name'),
-                        'is_admin' => $user->isAdmin()
                     ],
                     'authorization' => [
                         'token' => $token,
@@ -300,8 +253,6 @@ class JWTAuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'roles' => $user->roles->pluck('name'),
-                    'is_admin' => $user->isAdmin()
                 ]
             ]);
         } catch (\Exception $e) {

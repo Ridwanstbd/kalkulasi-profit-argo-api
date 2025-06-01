@@ -10,8 +10,7 @@ class PriceSchema extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
-        'product_id',
+        'service_id',
         'level_name',
         'level_order',
         'discount_percentage',
@@ -29,14 +28,10 @@ class PriceSchema extends Model
         'level_order' => 'integer',
     ];
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
 
-    public function product()
+    public function service()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Service::class);
     }
 
     public function getProfitMarginPercentageAttribute()

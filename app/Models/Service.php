@@ -5,12 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Project extends Model
+class Service extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'name',
         'sku',
         'description',
@@ -18,14 +17,9 @@ class Project extends Model
         'selling_price',
     ];
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
     public function costs()
     {
-        return $this->hasMany(ProjectCost::class);
+        return $this->hasMany(ServiceCost::class);
     }
 
     public function priceSchemas()

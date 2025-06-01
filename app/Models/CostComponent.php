@@ -10,7 +10,6 @@ class CostComponent extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'name',
         'description',
         'component_type',
@@ -24,8 +23,8 @@ class CostComponent extends Model
         'other'
     ];
 
-    public function productCosts()
+    public function serviceCosts()
     {
-        return $this->hasMany(ProductCost::class,'cost_component_id');
+        return $this->hasMany(ServiceCost::class,'cost_component_id');
     }
 }

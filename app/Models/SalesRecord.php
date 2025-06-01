@@ -10,17 +10,17 @@ class SalesRecord extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
-        'product_id',
+        'name',
+        'service_id',
         'month',
         'year',
-        'number_of_sales',
+        'date',
         'hpp',
         'selling_price'
     ];
 
-    public function product()
+    public function service()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Service::class);
     }
 }

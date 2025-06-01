@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\CostComponent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class CostComponentController extends Controller
 {
@@ -17,9 +16,7 @@ class CostComponentController extends Controller
     {
         $query = CostComponent::query();
         $meta = [];
-        
-        $query->where('user_id', JWTAuth::user()->id);
-        
+                
         if ($request->has('type')) {
             $type = $request->query('type');
             $validTypes = ['direct_material', 'indirect_material','direct_labor', 'overhead', 'packaging', 'other'];
@@ -91,7 +88,6 @@ class CostComponentController extends Controller
         }
 
         $validatedData = $validator->validated();
-        $validatedData['user_id'] = JWTAuth::user()->id;
 
         $costComponent = CostComponent::create($validatedData);
         
@@ -107,9 +103,7 @@ class CostComponentController extends Controller
      */
     public function show(string $id)
     {
-        $costComponent = CostComponent::where('id', $id)
-                                      ->where('user_id', JWTAuth::user()->id)
-                                      ->first();
+        $costComponent = CostComponent::find($id);
         
         if (!$costComponent) {
             return response()->json([
@@ -129,9 +123,7 @@ class CostComponentController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $costComponent = CostComponent::where('id', $id)
-                                      ->where('user_id', JWTAuth::user()->id)
-                                      ->first();
+        $costComponent = CostComponent::find($id);
         
         if (!$costComponent) {
             return response()->json([
@@ -166,9 +158,7 @@ class CostComponentController extends Controller
      */
     public function destroy(string $id)
     {
-        $costComponent = CostComponent::where('id', $id)
-                                      ->where('user_id', JWTAuth::user()->id)
-                                      ->first();
+        $costComponent = CostComponent::find($id);
         
         if (!$costComponent) {
             return response()->json([
@@ -176,8 +166,7 @@ class CostComponentController extends Controller
                 'message' => 'Komponen Biaya tidak ditemukan'
             ], 404);
         }
-        
-        if ($costComponent->productCosts()->count() > 0) {
+        if (method_exists($costComponent, 'serviceCosts') && $costComponent->serviceCosts()->count() > 0) {
             return response()->json([
                 'success' => false,
                 'message' => 'Komponen Biaya tidak dapat dihapus karena sedang digunakan'

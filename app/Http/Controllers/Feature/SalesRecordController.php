@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Feature;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
 use App\Models\SalesRecord;
 use Carbon\Carbon;
 use Exception;
@@ -13,37 +12,41 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class SalesRecordController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $user = JWTAuth::user();
-        
-        $year = $request->input('year', Carbon::now()->year);
-        $month = $request->input('month', Carbon::now()->month);
-        
-        $validationResult = $this->validateIndexParams($year, $month);
-        if ($validationResult !== true) {
-            return $validationResult;
+        $inputYear = $request->input('year');
+        $inputMonth = $request->input('month');
+
+        $validator = Validator::make([
+            'year' => $inputYear ?? Carbon::now()->year,
+            'month' => $inputMonth,
+        ], [
+            'year' => 'required|integer|min:2000|max:2900',
+            'month' => 'nullable|integer|min:1|max:12',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
-        
+
+        $validatedData = $validator->validated();
+        $year = $validatedData['year'];
+        $month = $validatedData['month'] ?? null;
+        if ($inputMonth === null && !isset($validatedData['month'])) {
+            $month = Carbon::now()->month;
+        } else {
+            $month = $validatedData['month'] ?? null;
+        }
+
         try {
-            $salesRecords = $this->fetchSalesRecords($user->id, $year, $month);
-            
+            $salesRecords = $this->fetchSalesRecords($year, $month);
             $salesData = $this->processSalesData($salesRecords);
-            
             $summary = $this->calculateSummary($salesData);
-            
-            $filters = $this->getAvailableFilters($user->id, $year, $month);
-            
+            $filters = $this->getAvailableFilters($year, $month);
+
             return response()->json([
                 'success' => true,
                 'data' => $salesData,
@@ -57,154 +60,89 @@ class SalesRecordController extends Controller
             ], 500);
         }
     }
-    
-    /**
-     * Validate year and month parameters
-     *
-     * @param int $year
-     * @param int|null $month
-     * @return bool|JsonResponse
-     */
-    private function validateIndexParams(int $year, ?int $month)
-    {
-        $validator = Validator::make([
-            'year' => $year,
-            'month' => $month,
-        ], [
-            'year' => 'required|integer|min:2000|max:2900',
-            'month' => 'nullable|integer|min:1|max:12',
-        ]);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
-        
-        return true;
-    }
-    
-    /**
-     * Fetch sales records for the specified period
-     *
-     * @param int $userId
-     * @param int $year
-     * @param int|null $month
-     * @return EloquentCollection
-     */
-    private function fetchSalesRecords(int $userId, int $year, ?int $month)
+    private function fetchSalesRecords(int $year, ?int $month): EloquentCollection
     {
-        $query = SalesRecord::with('product')
-            ->where('user_id', $userId)
+        $query = SalesRecord::with('service')
             ->where('year', $year);
-        
+
         if ($month) {
             $query->where('month', $month);
         }
-        
+
         return $query->get();
     }
-    
-    
-    /**
-     * Process sales data including products without sales
-     *
-     * @param Collection $salesRecords
-     * @param int $userId
-     * @param array $productsWithSales
-     * @param int $year
-     * @param int|null $month
-     * @return Collection
-     */
-    private function processSalesData(Collection $salesRecords) 
+
+    private function processSalesData(Collection $salesRecords): Collection
     {
         $salesDataArray = [];
-        
+
         foreach ($salesRecords as $record) {
-            $product = $record->product;
+            $service = $record->service;
+            if (!$service) {
+                continue;
+            }
             $profitPerUnit = $record->selling_price - $record->hpp;
             $profitPercentage = $this->calculateProfitPercentage($record->selling_price, $profitPerUnit);
-            
+
             $salesDataArray[] = [
                 'id' => $record->id,
+                'name' => $record->name,
                 'month' => $record->month,
                 'year' => $record->year,
-                'number_of_sales' => $record->number_of_sales,
+                'date' => $record->date,
                 'profit_unit' => $profitPerUnit,
                 'profit_percentage' => $profitPercentage,
-                'sub_total' => $record->selling_price * $record->number_of_sales,
-                'profit' => $profitPerUnit * $record->number_of_sales,
-                'product_name' => $product->name,
-                'product_sku' => $product->sku,
+                'sub_total' => $record->selling_price * 1,
+                'profit' => $profitPerUnit * 1,
+                'service_name' => $service->name,
+                'service_sku' => $service->sku,
             ];
         }
-        
-        
+
         $salesData = collect($salesDataArray);
-        
+
         $totalProfit = $salesData->sum('profit');
         return $salesData->map(function ($item) use ($totalProfit) {
-            $item['profit_contribution_percentage'] = $totalProfit > 0 ? 
+            $item['profit_contribution_percentage'] = $totalProfit > 0 ?
                 round(($item['profit'] / $totalProfit) * 100, 2) : 0;
             return $item;
         });
     }
-    
-    /**
-     * Calculate profit percentage
-     *
-     * @param float $sellingPrice
-     * @param float $profitPerUnit
-     * @return float
-     */
-    private function calculateProfitPercentage(float $sellingPrice, float $profitPerUnit)
+
+    private function calculateProfitPercentage(float $sellingPrice, float $profitPerUnit): float
     {
         return $sellingPrice > 0 ? round(($profitPerUnit / $sellingPrice) * 100, 0) : 0;
     }
-    
-    /**
-     * Calculate summary statistics
-     *
-     * @param Collection $salesData
-     * @return array
-     */
-    private function calculateSummary(Collection $salesData)
+
+    private function calculateSummary(Collection $salesData): array
     {
         $totalSales = $salesData->sum('sub_total');
         $totalProfit = $salesData->sum('profit');
         $totalProfitPercentage = $totalSales > 0 ? round(($totalProfit / $totalSales) * 100, 2) : 0;
-        
+
         return [
             'total_sales' => $totalSales,
             'total_profit' => $totalProfit,
             'total_profit_percentage' => $totalProfitPercentage
         ];
     }
-    
-    /**
-     * Get available years and months for filtering
-     *
-     * @param int $userId
-     * @param int $year
-     * @param int|null $month
-     * @return array
-     */
-    private function getAvailableFilters(int $userId, int $year, ?int $month)
+
+    private function getAvailableFilters(int $year, ?int $month): array
     {
-        $availableYears = SalesRecord::where('user_id', $userId)
-            ->select(DB::raw('DISTINCT year'))
+        $availableYears = SalesRecord::select(DB::raw('DISTINCT year'))
             ->orderBy('year', 'desc')
             ->pluck('year')
             ->toArray();
-            
+
         $availableMonths = [];
         if ($year) {
-            $availableMonths = SalesRecord::where('user_id', $userId)
-                ->where('year', $year)
+            $availableMonthsQuery = SalesRecord::where('year', $year)
                 ->select(DB::raw('DISTINCT month'))
-                ->orderBy('month')
-                ->pluck('month')
-                ->toArray();
+                ->orderBy('month');
+            $availableMonths = $availableMonthsQuery->pluck('month')->toArray();
         }
-        
+
         return [
             'available_years' => $availableYears,
             'available_months' => $availableMonths,
@@ -213,63 +151,24 @@ class SalesRecordController extends Controller
         ];
     }
 
-    /**
-     * Store a newly created resource in storage.
-     * 
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:products,id',
+            'service_id' => 'required|exists:services,id',
+            'name' => 'required|string',
             'month' => 'required|integer|min:1|max:12',
             'year' => 'required|integer|min:2000|max:2100',
-            'number_of_sales' => 'required|integer|min:1',
-            'hpp' => 'required|integer|min:1',
-            'selling_price' => 'required|integer|min:1',
+            'date' => 'required|integer|min:1|max:31',
+            'hpp' => 'required|numeric|min:0',
+            'selling_price' => 'required|numeric|min:0|gte:hpp',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
         }
-        
+
         try {
-            $user = JWTAuth::user();
-            
-            $existingRecord = SalesRecord::where('user_id', $user->id)
-                ->where('product_id', $request->product_id)
-                ->where('month', $request->month)
-                ->where('year', $request->year)
-                ->exists();
-                
-            if ($existingRecord) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Penjualan untuk produk ini sudah ada di bulan yang diminta'
-                ], 422);
-            }
-
-            $product = Product::where('id', $request->product_id)
-                ->where('user_id', $user->id)
-                ->first();
-                
-            if (!$product) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Produk tidak ditemukan atau bukan milik anda'
-                ], 404);
-            }
-
-            $record = SalesRecord::create([
-                'user_id' => $user->id,
-                'product_id' => $request['product_id'],
-                'month' => $request['month'],
-                'year' => $request['year'],
-                'number_of_sales' => $request['number_of_sales'],
-                'selling_price' => $request['selling_price'],
-                'hpp' => $request['hpp']
-            ]);
+            $record = SalesRecord::create($validator->validated());
 
             return response()->json([
                 'success' => true,
@@ -284,59 +183,47 @@ class SalesRecordController extends Controller
         }
     }
 
-    /**
-     * Display the specified resource.
-     * 
-     * @param string $id
-     * @return JsonResponse
-     */
-    public function show(string $id)
+    public function show(string $id): JsonResponse
     {
         try {
-            $user = JWTAuth::user();
-            $salesRecord = SalesRecord::get()
-            ->where('user_id',$user->id)
-            ->find($id);
-            
+            $salesRecord = SalesRecord::find($id);
+
             if (!$salesRecord) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Penjualan Tidak ditemukan!'
                 ], 404);
             }
-            
+
+            $service = $salesRecord->service;
+            if (!$service) {
+                 return response()->json([
+                    'success' => false,
+                    'message' => 'Data Layanan terkait tidak ditemukan!'
+                ], 404);
+            }
+
             $profitPerUnit = $salesRecord->selling_price - $salesRecord->hpp;
-            $profitPercentage = $salesRecord->selling_price > 0 ? 
-                round(($profitPerUnit / $salesRecord->selling_price) * 100, 2) : 0;
-            $subTotal = $salesRecord->selling_price * $salesRecord->number_of_sales;
-            $totalProfit = $profitPerUnit * $salesRecord->number_of_sales;
-            
-            $allSalesRecords = SalesRecord::with('product')
-                ->where('user_id', $user->id)
-                ->where('year', $salesRecord->year)
+            $profitPercentage = $this->calculateProfitPercentage($salesRecord->selling_price, $profitPerUnit);
+
+            $allSalesRecordsThisMonthYear = SalesRecord::where('year', $salesRecord->year)
                 ->where('month', $salesRecord->month)
                 ->get();
-                
-            $totalProfitAllSales = 0;
-            foreach ($allSalesRecords as $record) {
-                $recordProfitPerUnit = $record->selling_price - $record->hpp;
-                $totalProfitAllSales += $recordProfitPerUnit * $record->number_of_sales;
+
+            $totalProfitAllSalesThisMonthYear = 0;
+            foreach ($allSalesRecordsThisMonthYear as $record) {
+                $totalProfitAllSalesThisMonthYear += ($record->selling_price - $record->hpp);
             }
-            
-            $profitContributionPercentage = $totalProfitAllSales > 0 ? 
-                round(($totalProfit / $totalProfitAllSales) * 100, 2) : 0;
-            
+
+            $profitContributionPercentage = $totalProfitAllSalesThisMonthYear > 0 ?
+                round((($salesRecord->selling_price - $salesRecord->hpp) / $totalProfitAllSalesThisMonthYear) * 100, 2) : 0;
+
             $data = $salesRecord->toArray();
-            $product = $salesRecord->product;
-            $data['product_name'] = $product->name;
-            $data['hpp'] = $salesRecord->hpp;
-            $data['selling_price'] = $salesRecord->selling_price;
+            $data['service_name'] = $service->name;
             $data['profit_unit'] = $profitPerUnit;
             $data['profit_percentage'] = $profitPercentage;
-            $data['sub_total'] = $subTotal;
-            $data['total_profit'] = $totalProfit;
             $data['profit_contribution_percentage'] = $profitContributionPercentage;
-            
+
             return response()->json([
                 'success' => true,
                 'data' => $data
@@ -349,78 +236,38 @@ class SalesRecordController extends Controller
         }
     }
 
-    /**
-     * Update the specified resource in storage.
-     * 
-     * @param Request $request
-     * @param string $id
-     * @return JsonResponse
-     */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $id): JsonResponse
     {
+        $salesRecord = SalesRecord::find($id);
+
+        if (!$salesRecord) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Penjualan tidak ditemukan'
+            ], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'service_id' => 'sometimes|required|exists:services,id',
+            'name' => 'sometimes|required|string',
+            'month' => 'sometimes|required|integer|min:1|max:12',
+            'year' => 'sometimes|required|integer|min:2000|max:2100',
+            'date' => 'sometimes|required|integer|min:1|max:31',
+            'hpp' => 'sometimes|required|numeric|min:0',
+            'selling_price' => 'sometimes|required|numeric|min:0|gte:hpp',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+        }
+
         try {
-            $user = JWTAuth::user();
-            $salesRecord = SalesRecord::where('user_id', $user->id)->find($id);
-            
-            if (!$salesRecord) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Penjualan tidak ditemukan'
-                ], 404);
-            }
-            
-            $validator = Validator::make($request->all(), [
-                'product_id' => 'sometimes|required|exists:products,id',
-                'month' => 'sometimes|required|integer|min:1|max:12',
-                'year' => 'sometimes|required|integer|min:2000|max:2100',
-                'number_of_sales' => 'sometimes|required|integer|min:1',
-                'hpp' => 'sometimes|required|integer|min:1',
-                'selling_price' => 'sometimes|required|integer|min:1',
-            ]);
-            
-            if ($validator->fails()) {
-                return response()->json(['errors' => $validator->errors()], 422);
-            }
-            
-            if ($request->has('product_id') || $request->has('month') || $request->has('year')) {
-                $product_id = $request->has('product_id') ? $request->product_id : $salesRecord->product_id;
-                $month = $request->has('month') ? $request->month : $salesRecord->month;
-                $year = $request->has('year') ? $request->year : $salesRecord->year;
-                
-                $existingRecord = SalesRecord::where('user_id', $user->id)
-                    ->where('product_id', $product_id)
-                    ->where('month', $month)
-                    ->where('year', $year)
-                    ->where('id', '!=', $id)
-                    ->exists();
-                    
-                if ($existingRecord) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Penjualan untuk produk ini sudah ada di bulan yang diminta'
-                    ], 422);
-                }
-                
-                if ($request->has('product_id') && $request->product_id != $salesRecord->product_id) {
-                    $product = Product::where('id', $request->product_id)
-                        ->where('user_id', $user->id)
-                        ->first();
-                        
-                    if (!$product) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Produk tidak ditemukan atau bukan milik anda'
-                        ], 404);
-                    }
-                }
-            }
-            
-            $salesRecord->update($request->all());
-            
+            $salesRecord->update($validator->validated());
+
             return response()->json([
                 'success' => true,
                 'message' => 'Penjualan berhasil diperbarui',
-                'data' => $salesRecord
+                'data' => $salesRecord->fresh()
             ]);
         } catch (Exception $e) {
             return response()->json([
@@ -430,27 +277,20 @@ class SalesRecordController extends Controller
         }
     }
 
-    /**
-     * Remove the specified resource from storage.
-     * 
-     * @param string $id
-     * @return JsonResponse
-     */
-    public function destroy(string $id)
+    public function destroy(string $id): JsonResponse
     {
         try {
-            $user = JWTAuth::user();
-            $salesRecord = SalesRecord::where('user_id',$user->id)->find($id);
-            
+            $salesRecord = SalesRecord::find($id);
+
             if (!$salesRecord) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Penjualan tidak ditemukan'
                 ], 404);
             }
-            
+
             $salesRecord->delete();
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Penjualan berhasil dihapus'

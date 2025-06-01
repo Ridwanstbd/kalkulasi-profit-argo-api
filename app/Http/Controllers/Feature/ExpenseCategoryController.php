@@ -7,7 +7,6 @@ use App\Models\ExpenseCategory;
 use App\Models\OperationalExpense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class ExpenseCategoryController extends Controller
 {
@@ -16,9 +15,7 @@ class ExpenseCategoryController extends Controller
      */
     public function index()
     {
-        $user = JWTAuth::user();
         $categories = ExpenseCategory::with('operationalExpenses')
-            ->where('user_id',$user->id)
             ->get();
 
         $categories->each(function ($category) {
@@ -58,10 +55,7 @@ class ExpenseCategoryController extends Controller
             ], 422);
         }
 
-        $user = JWTAuth::user();
-
         $category = ExpenseCategory::create([
-            'user_id' => $user->id,
             'name' => $request['name'],
             'description' => $request['description'],
             'is_salary' => $request['is_salary'],
@@ -79,13 +73,8 @@ class ExpenseCategoryController extends Controller
      */
     public function show(string $id)
     {
-        $user = JWTAuth::user();
         
-        $category = ExpenseCategory::with(['operationalExpenses' => function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            }])
-            ->where('user_id', $user->id)
-            ->find($id);
+        $category = ExpenseCategory::find($id);
 
         if (!$category) {
             return response()->json([
@@ -111,9 +100,8 @@ class ExpenseCategoryController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $user = JWTAuth::user();
         
-        $category = ExpenseCategory::where('user_id', $user->id)->find($id);
+        $category = ExpenseCategory::find($id);
 
         if (!$category) {
             return response()->json([
@@ -149,9 +137,8 @@ class ExpenseCategoryController extends Controller
      */
     public function destroy(string $id)
     {
-        $user = JWTAuth::user();
         
-        $category = ExpenseCategory::where('user_id', $user->id)->find($id);
+        $category = ExpenseCategory::find($id);
 
         if (!$category) {
             return response()->json([
@@ -160,10 +147,7 @@ class ExpenseCategoryController extends Controller
             ], 404);
         }
 
-        // Periksa apakah kategori memiliki item biaya
-        $hasExpenses = $category->operationalExpenses()
-            ->where('user_id', $user->id)
-            ->exists();
+        $hasExpenses = $category->operationalExpenses()->exists();
         
         if ($hasExpenses) {
             return response()->json([

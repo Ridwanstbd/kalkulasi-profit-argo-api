@@ -3,39 +3,37 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use App\Models\Service;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
-class ProductController extends Controller
+class ServiceController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $user = JWTAuth::user();
-        $products = Product::where('user_id', $user->id)->with(['costs'])->get();
-        if($products->isEmpty()){
+        $service = Service::with(['costs'])->get();
+        if($service->isEmpty()){
             return response()->json([
                 'success' => false,
-                'message' => 'Produk tidak ditemukan.'
+                'message' => 'Layanan tidak ditemukan.'
             ]);
         }
         $stats = [
-            'total_products' => $products->count(),
-            'avg_selling_price' => $products->avg('selling_price'),
-            'avg_hpp' => $products->avg('hpp'),
-            'total_selling_value' => $products->sum('selling_price'),
-            'total_hpp_value' => $products->sum('hpp'),
-            'profit_margin' => $products->sum('selling_price') - $products->sum('hpp')
+            'total_services' => $service->count(),
+            'avg_selling_price' => $service->avg('selling_price'),
+            'avg_hpp' => $service->avg('hpp'),
+            'total_selling_value' => $service->sum('selling_price'),
+            'total_hpp_value' => $service->sum('hpp'),
+            'profit_margin' => $service->sum('selling_price') - $service->sum('hpp')
         ];
         return response()->json([
             'success' => true,
-            'message' => 'Produk ditemukan',
+            'message' => 'Layanan ditemukan',
             'stats' => $stats,
-            'data' => $products
+            'data' => $service
         ],200);
     }
 
@@ -59,25 +57,18 @@ class ProductController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-        $user = JWTAuth::user();
-        if($request->user_id != $user->id){
-            return response()->json([
-                'success' => false,
-                'message' => 'Tidak diizinkan membuat produk untuk pengguna lain'
-            ], 403);
-        }
         try {
-            $product = Product::create($request->all());
+            $service = Service::create($request->all());
             
             return response()->json([
                 'success' => true,
-                'message' => 'Produk berhasil dibuat',
-                'data' => $product
+                'message' => 'Layanan berhasil dibuat',
+                'data' => $service
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal membuat produk',
+                'message' => 'Gagal membuat layanan',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -88,30 +79,28 @@ class ProductController extends Controller
      */
     public function show(string $id)
     {
-        $user = JWTAuth::user();
         try {
-            $product = Product::where('id',$id)
-                ->where('user_id',$user->id)
+            $service = Service::where('id',$id)
                 ->with(['costs'])
                 ->first();
-            if(!$product){
+            if(!$service){
                 return response()->json([
                     'success' => false,
-                    'message' => 'Product tidak ditemukan'
+                    'message' => 'layanan tidak ditemukan'
                 ],404);
             }
-            $hppBreakdown = $product->hpp_breakdown;
+            $hppBreakdown = $service->hpp_breakdown;
 
             return response()->json([
                 'success' => true,
-                'message' => 'Produk ditemukan',
-                'data' => $product,
+                'message' => 'Layanan ditemukan',
+                'data' => $service,
                 'hpp_breakdown' => $hppBreakdown
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal mengambil data produk',
+                'message' => 'Gagal mengambil data layanan',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -137,30 +126,27 @@ class ProductController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-
-        $user = JWTAuth::user();
-        
         try {
-            $product = Product::where('id', $id)->where('user_id', $user->id)->first();
+            $service = Service::where('id', $id)->first();
             
-            if(!$product){
+            if(!$service){
                 return response()->json([
                     'success' => false,
-                    'message' => 'Produk tidak ditemukan atau bukan milik pengguna'
+                    'message' => 'Layanan tidak ditemukan'
                 ], 404);
             }
             
-            $product->update($request->all());
+            $service->update($request->all());
             
             return response()->json([
                 'success' => true,
-                'message' => 'Produk berhasil diperbarui',
-                'data' => $product
+                'message' => 'Layanan berhasil diperbarui',
+                'data' => $service
             ], 200);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal memperbarui produk',
+                'message' => 'Gagal memperbarui layanan',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -171,28 +157,23 @@ class ProductController extends Controller
      */
     public function destroy(string $id)
     {
-        $user = JWTAuth::user();
-        
         try {
-            $product = Product::where('id', $id)->where('user_id', $user->id)->first();
-            
-            if(!$product){
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Produk tidak ditemukan atau bukan milik pengguna'
-                ], 404);
-            }
-            
-            $product->delete();
+            $service = Service::findOrFail($id);
+            $service->delete();
             
             return response()->json([
                 'success' => true,
-                'message' => 'Produk berhasil dihapus'
+                'message' => 'Layanan berhasil dihapus'
             ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Layanan tidak ditemukan'
+            ], 404);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menghapus produk',
+                'message' => 'Gagal menghapus layanan',
                 'error' => $e->getMessage()
             ], 500);
         }

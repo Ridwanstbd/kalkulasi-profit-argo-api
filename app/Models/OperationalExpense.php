@@ -11,7 +11,6 @@ class OperationalExpense extends Model
     use HasFactory;
 
     protected $fillable = [
-        'user_id',
         'expense_category_id',
         'quantity',
         'unit',
@@ -224,31 +223,27 @@ class OperationalExpense extends Model
         ];
     }
 
-    public static function getAvailableYears($userId = null)
+    /**
+     * Get available years
+     */
+    public static function getAvailableYears()
     {
-        $query = static::select('year')
-            ->distinct();
-            
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-        
-        return $query->orderBy('year')
+        return static::select('year')
+            ->distinct()
+            ->orderBy('year')
             ->pluck('year')
             ->toArray();
     }
 
-    public static function getAvailableMonths($year, $userId = null)
+    /**
+     * Get available months for a specific year
+     */
+    public static function getAvailableMonths($year)
     {
-        $query = static::select('month')
+        return static::select('month')
             ->where('year', $year)
-            ->distinct();
-            
-        if ($userId) {
-            $query->where('user_id', $userId);
-        }
-        
-        return $query->orderBy('month')
+            ->distinct()
+            ->orderBy('month')
             ->pluck('month')
             ->toArray();
     }

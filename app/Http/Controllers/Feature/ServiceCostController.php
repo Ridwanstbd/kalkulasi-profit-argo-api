@@ -3,54 +3,51 @@
 namespace App\Http\Controllers\Feature;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
-use App\Models\ProductCost;
+use App\Models\Service;
+use App\Models\ServiceCost;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
-class HppController extends Controller
+class ServiceCostController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
-    {
-        $user = JWTAuth::user();
+    {        
+        $userServices = Service::all();
         
-        $userProducts = Product::where('user_id', $user->id)->get();
-        
-        if($userProducts->isEmpty()) {
+        if($userServices->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Produk yang terhubung masih kosong'
+                'message' => 'Layanan yang terhubung masih kosong'
             ]);
         }
         
-        $productId = $request->input('product_id', $userProducts->first()->id);
+        $serviceId = $request->input('service_id', $userServices->first()->id);
         
-        $productCosts = ProductCost::where('product_id', $productId)
-            ->with(['product', 'costComponent'])
+        $serviceCosts = ServiceCost::where('service_id', $serviceId)
+            ->with(['service', 'costComponent'])
             ->get();
         
-        $product = $userProducts->firstWhere('id', $productId);
+        $service = $userServices->firstWhere('id', $serviceId);
         
-        if($productCosts->isEmpty()){
+        if($serviceCosts->isEmpty()){
             return response()->json([
                 'success' => false,
-                'message' => 'Komponen biaya untuk produk ini masih kosong',
-                'product' => $product,
-                'all_products' => $userProducts
+                'message' => 'Komponen biaya untuk Layanan ini masih kosong',
+                'service' => $service,
+                'all_services' => $userServices
             ]);
         }
         
         return response()->json([
             'success' => true,
-            'message' => 'Komponen biaya produk berhasil ditampilkan!',
-            'product' => $product,
-            'all_products' => $userProducts,
-            'data' => $productCosts
+            'message' => 'Komponen biaya Layanan berhasil ditampilkan!',
+            'service' => $service,
+            'all_services' => $userServices,
+            'data' => $serviceCosts
         ]);
     }
 
@@ -60,7 +57,7 @@ class HppController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|exists:products,id',
+            'service_id' => 'required|exists:services,id',
             'costs' => 'required|array',
             'costs.*.cost_component_id' => 'required|exists:cost_components,id',
             'costs.*.unit' => 'required|string',
@@ -68,6 +65,7 @@ class HppController extends Controller
             'costs.*.quantity' => 'required|numeric|min:0',
             'costs.*.conversion_qty' => 'required|numeric|min:0',
         ]);
+        
         if($validator->fails()){
             return response()->json([
                 'success' => false,
@@ -75,19 +73,18 @@ class HppController extends Controller
                 'errors' => $validator->errors()
             ],422);
         }
-        $user = JWTAuth::user();
-        $productId = $request->product_id;
         
-        $product = Product::where('id', $productId)
-            ->where('user_id', $user->id)
-            ->first();
+        $serviceId = $request->service_id;
+        
+        $service = Service::find($serviceId);
             
-        if (!$product) {
+        if (!$service) {
             return response()->json([
                 'success' => false,
-                'message' => 'Produk tidak ditemukan atau bukan milik Anda'
+                'message' => 'Layanan tidak ditemukan'
             ], 404);
         }
+        
         $costComponentIds = collect($request->costs)->pluck('cost_component_id')->toArray();
         $duplicates = array_count_values($costComponentIds);
         $duplicateIds = [];
@@ -106,7 +103,7 @@ class HppController extends Controller
             ], 422);
         }
 
-        $existingComponents = ProductCost::where('product_id', $productId)
+        $existingComponents = ServiceCost::where('service_id', $serviceId)
             ->whereIn('cost_component_id', $costComponentIds)
             ->pluck('cost_component_id')
             ->toArray();
@@ -114,39 +111,47 @@ class HppController extends Controller
         if (!empty($existingComponents)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Komponen biaya sudah ada dalam produk ini',
+                'message' => 'Komponen biaya sudah ada dalam Layanan ini',
                 'existing_components' => $existingComponents
             ], 422);
         }
+        
         try {
             DB::beginTransaction();
 
             foreach ($request->costs as $cost){
-                $amount = ($cost['conversion_qty'] ?? 1) > 0
-                ? ($cost['unit_price'] / $cost['conversion_qty']) * $cost['quantity']
-                : $cost['unit_price'] * $cost['quantity'];
+                $conversionQty = isset($cost['conversion_qty']) ? (float)$cost['conversion_qty'] : 1;
+                $unitPrice = (float)$cost['unit_price'];
+                $quantity = (float)$cost['quantity'];
+                
+                if ($conversionQty > 0) {
+                    $amount = ($unitPrice / $conversionQty) * $quantity;
+                } else {
+                    $amount = $unitPrice * $quantity;
+                }
 
-                ProductCost::create([
-                    'product_id' => $productId,
+                ServiceCost::create([
+                    'service_id' => $serviceId,
                     'cost_component_id' => $cost['cost_component_id'],
                     'unit' => $cost['unit'],
-                    'unit_price' => $cost['unit_price'],
-                    'quantity' => $cost['quantity'],
-                    'conversion_qty' => $cost['conversion_qty'],
+                    'unit_price' => $unitPrice,
+                    'quantity' => $quantity,
+                    'conversion_qty' => $conversionQty,
                     'amount' => $amount,
                 ]);
             }
 
-            $hpp = $this->calculateHpp($productId);
-            $product->hpp = $hpp;
-            $product->save();
+            $hpp = $this->calculateHpp($serviceId);
+            $service->hpp = $hpp;
+            $service->save();
             DB::commit();
 
-            $updatedProduct = Product::with('costs.costComponent')->find($productId);
+            $service->refresh();
+            
             return response()->json([
                 'success' => true,
                 'message' => 'HPP berhasil disimpan',
-                'data' => $updatedProduct
+                'data' => $service
             ], 201);
 
         } catch (\Exception $e) {
@@ -164,32 +169,31 @@ class HppController extends Controller
      */
     public function show(Request $request, string $id)
     {
-        $productCost = ProductCost::where('id', $id)
-            ->with('product')    
+        $serviceCost = ServiceCost::where('id', $id)
+            ->with('service')    
             ->with('costComponent')
             ->first();
         
-        if (!$productCost) {
-            return response()->json([
+        if (!$serviceCost) {
+            $jsonResponse = json_encode([
                 'success' => true,
-                'message' => 'Produk belum memiliki komponen biaya',
-                'data' => (object)[]
-            ], 200);
+                'message' => 'Layanan belum memiliki komponen biaya',
+                'data' => new \stdClass()
+            ]);
+            
+            return response($jsonResponse, 200)
+                ->header('Content-Type', 'application/json');
         }
         
         return response()->json([
             'success' => true,
             'message' => 'Detail komponen biaya produk',
-            'data' => $productCost
+            'data' => $serviceCost
         ], 200);
     }
 
     /**
-     * Update a single product cost record.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  string  $id
-     * @return \Illuminate\Http\JsonResponse
+     * Update a single service cost record.
      */
     public function update(Request $request, string $id)
     {
@@ -209,21 +213,19 @@ class HppController extends Controller
             ], 422);
         }
         
-        $user = JWTAuth::user();
-        $productCost = ProductCost::findOrFail($id);
+        $serviceCost = ServiceCost::findOrFail($id);
         
-        $product = Product::where('id', $productCost->product_id)
-            ->where('user_id', $user->id)
-            ->first();
+        $service = Service::find($serviceCost->service_id);
             
-        if (!$product) {
+        if (!$service) {
             return response()->json([
                 'success' => false,
-                'message' => 'Produk tidak ditemukan atau bukan milik Anda'
-            ], 403);
+                'message' => 'Layanan tidak ditemukan'
+            ], 404);
         }
-        if ($request->cost_component_id != $productCost->cost_component_id) {
-            $exists = ProductCost::where('product_id', $productCost->product_id)
+        
+        if ($request->cost_component_id != $serviceCost->cost_component_id) {
+            $exists = ServiceCost::where('service_id', $serviceCost->service_id)
                 ->where('cost_component_id', $request->cost_component_id)
                 ->where('id', '!=', $id)
                 ->exists();
@@ -235,26 +237,33 @@ class HppController extends Controller
                 ], 422);
             }
         }
+        
         try {
             DB::beginTransaction();
             
-            $amount = ($request->conversion_qty > 0)
-                ? ($request->unit_price / $request->conversion_qty) * $request->quantity
-                : $request->unit_price * $request->quantity;
+            // FIX: Perbaiki logika perhitungan amount
+            $conversionQty = (float)$request->conversion_qty;
+            $unitPrice = (float)$request->unit_price;
+            $quantity = (float)$request->quantity;
             
-            $productCost->update([
-                'product_id' => $request->product_id,
+            if ($conversionQty > 0) {
+                $amount = ($unitPrice / $conversionQty) * $quantity;
+            } else {
+                $amount = $unitPrice * $quantity;
+            }
+            
+            $serviceCost->update([
                 'cost_component_id' => $request->cost_component_id,
                 'unit' => $request->unit,
-                'unit_price' => $request->unit_price,
-                'quantity' => $request->quantity,
-                'conversion_qty' => $request->conversion_qty,
+                'unit_price' => $unitPrice,
+                'quantity' => $quantity,
+                'conversion_qty' => $conversionQty,
                 'amount' => $amount,
             ]);
             
-            $hpp = $this->calculateHpp($product->id);
-            $product->hpp = $hpp;
-            $product->save();
+            $hpp = $this->calculateHpp($service->id);
+            $service->hpp = $hpp;
+            $service->save();
             
             DB::commit();
             
@@ -273,37 +282,32 @@ class HppController extends Controller
     }
 
     /**
-     * Remove the specified product cost.
+     * Remove the specified service cost.
      *
      * @param  string  $id
      * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(string $id)
     {
-        $user = JWTAuth::user();
-        $productCost = ProductCost::findOrFail($id);
+        $serviceCost = ServiceCost::findOrFail($id);
         
-        $product = Product::where('id', $productCost->product_id)
-            ->where('user_id', $user->id)
-            ->first();
+        $service = Service::find($serviceCost->service_id); 
             
-        if (!$product) {
+        if (!$service) {
             return response()->json([
                 'success' => false,
-                'message' => 'Produk tidak ditemukan atau bukan milik Anda'
-            ], 403);
+                'message' => 'Layanan tidak ditemukan'
+            ], 404);
         }
         
         try {
             DB::beginTransaction();
             
-            // Delete the specific product cost
-            $productCost->delete();
+            $serviceCost->delete();
             
-            // Recalculate and update HPP
-            $hpp = $this->calculateHpp($product->id);
-            $product->hpp = $hpp;
-            $product->save();
+            $hpp = $this->calculateHpp($service->id);
+            $service->hpp = $hpp;
+            $service->save();
             
             DB::commit();
 
@@ -320,9 +324,9 @@ class HppController extends Controller
         }
     }
 
-    private function calculateHpp($productId)
+    private function calculateHpp($serviceId)
     {
-        $totalCost = ProductCost::where('product_id', $productId)->sum('amount');
+        $totalCost = ServiceCost::where('service_id', $serviceId)->sum('amount');
         
         return $totalCost;
     }

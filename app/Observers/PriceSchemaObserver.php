@@ -3,7 +3,7 @@
 namespace App\Observers;
 
 use App\Models\PriceSchema;
-use App\Models\Project;
+use App\Models\Service;
 
 class PriceSchemaObserver
 {
@@ -12,7 +12,7 @@ class PriceSchemaObserver
      */
     public function created(PriceSchema $priceSchema): void
     {
-        $this->updateprojectSellingPrice($priceSchema);
+        $this->updateServiceSellingPrice($priceSchema);
     }
 
     /**
@@ -20,7 +20,7 @@ class PriceSchemaObserver
      */
     public function updated(PriceSchema $priceSchema): void
     {
-        $this->updateprojectSellingPrice($priceSchema);
+        $this->updateServiceSellingPrice($priceSchema);
     }
 
     /**
@@ -28,26 +28,26 @@ class PriceSchemaObserver
      */
     public function deleted(PriceSchema $priceSchema): void
     {
-        $this->updateprojectSellingPrice($priceSchema);
+        $this->updateServiceSellingPrice($priceSchema);
     }
 
     /**
      * Update the project's selling price based on the highest level order schema
      */
-    private function updateprojectSellingPrice(PriceSchema $priceSchema): void
+    private function updateServiceSellingPrice(PriceSchema $priceSchema): void
     {
-        $projectId = $priceSchema->project_id;
+        $serviceId = $priceSchema->service_id;
         
-        $highestLevelSchema = PriceSchema::where('project_id', $projectId)
+        $highestLevelSchema = PriceSchema::where('service_id', $serviceId)
             ->orderBy('level_order', 'desc')
             ->first();
         
         if ($highestLevelSchema) {
-            Project::where('id', $projectId)->update([
+            Service::where('id', $serviceId)->update([
                 'selling_price' => $highestLevelSchema->selling_price
             ]);
         } else {
-            $project = Project::find($projectId);
+            $project = Service::find($serviceId);
             if ($project) {
                 $project->update([
                     'selling_price' => $project->hpp ?? null

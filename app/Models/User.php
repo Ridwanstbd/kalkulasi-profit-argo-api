@@ -54,34 +54,9 @@ class User extends Authenticatable implements JWTSubject
 
     public function getJWTCustomClaims()
     {
-        return [
-            'roles' => $this->roles()->pluck('name')->toArray()
-        ];
+        return [];
     }
 
-    public function roles()
-    {
-        return $this->belongsToMany(Role::class, 'user_roles');
-    }
-
-    public function hasRole($role)
-    {
-        return $this->roles()->where('name',$role)->exists();
-    }
-
-    public function isAdmin()
-    {
-        return $this->hasRole('admin');
-    }
-    public function subscriptions()
-    {
-        return $this->hasMany(UserSubscription::class);
-    }
-   
-    public function products()
-    {
-        return $this->hasMany(Product::class);
-    }
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new ResetPassword($token));

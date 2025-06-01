@@ -8,7 +8,6 @@ use App\Models\OperationalExpense;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Tymon\JWTAuth\Facades\JWTAuth;
 
 class OperationalExpenseController extends Controller
 {
@@ -17,13 +16,10 @@ class OperationalExpenseController extends Controller
      */
     public function index(Request $request)
     {
-        $user = JWTAuth::user();
-        
         $year = $request->input('year', Carbon::now()->year);
         $month = $request->input('month', Carbon::now()->month);
         
-        $query = OperationalExpense::with('category')
-            ->where('user_id', $user->id);
+        $query = OperationalExpense::with('category');
             
         if ($year) {
             $query->where('year', $year);
@@ -32,18 +28,13 @@ class OperationalExpenseController extends Controller
             $query->where('month', $month);
         }
         
-        // Get expenses
         $expenses = $query->get();
         
-        // Get available years and months for filtering
-        $availableYears = OperationalExpense::getAvailableYears($user->id);
-        $availableMonths = $year ? OperationalExpense::getAvailableMonths($year, $user->id) : [];
-        
-        // Group expenses by category for the summary
+        $availableYears = OperationalExpense::getAvailableYears();
+        $availableMonths = $year ? OperationalExpense::getAvailableMonths($year) : [];
         $expensesByCategory = $expenses->groupBy('expense_category_id');
         
-        // Get all categories for this user
-        $categories = ExpenseCategory::where('user_id', $user->id)->get();
+        $categories = ExpenseCategory::get();
         
         $summary = [];
         $totalSalary = 0;
@@ -96,8 +87,6 @@ class OperationalExpenseController extends Controller
      */
     public function store(Request $request)
     {
-        $user = JWTAuth::user();
-        
         $validator = Validator::make($request->all(), [
             'expense_category_id' => 'required|exists:expense_categories,id',
             'quantity' => 'required|integer|min:1',
@@ -113,21 +102,8 @@ class OperationalExpenseController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-        
-        // Verifikasi bahwa kategori milik user yang sama
-        $categoryBelongsToUser = ExpenseCategory::where('id', $request->expense_category_id)
-            ->where('user_id', $user->id)
-            ->exists();
-            
-        if (!$categoryBelongsToUser) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Kategori biaya tidak ditemukan'
-            ], 404);
-        }
 
         $data = $request->all();
-        $data['user_id'] = $user->id;
         
         if (!isset($data['year'])) {
             $data['year'] = Carbon::now()->year;
@@ -137,8 +113,8 @@ class OperationalExpenseController extends Controller
             $data['month'] = Carbon::now()->month;
         }
 
-        $existingExpense = OperationalExpense::where('user_id', $user->id)
-            ->where('expense_category_id', $data['expense_category_id'])
+        // Check for duplicate expense in same category, year, and month
+        $existingExpense = OperationalExpense::where('expense_category_id', $data['expense_category_id'])
             ->where('year', $data['year'])
             ->where('month', $data['month'])
             ->first();
@@ -164,11 +140,7 @@ class OperationalExpenseController extends Controller
      */
     public function show(string $id)
     {
-        $user = JWTAuth::user();
-        
-        $expense = OperationalExpense::with('category')
-            ->where('user_id', $user->id)
-            ->find($id);
+        $expense = OperationalExpense::with('category')->find($id);
 
         if (!$expense) {
             return response()->json([
@@ -188,9 +160,7 @@ class OperationalExpenseController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $user = JWTAuth::user();
-        
-        $expense = OperationalExpense::where('user_id', $user->id)->find($id);
+        $expense = OperationalExpense::find($id);
 
         if (!$expense) {
             return response()->json([
@@ -214,31 +184,18 @@ class OperationalExpenseController extends Controller
                 'errors' => $validator->errors()
             ], 422);
         }
-        
-        if ($request->has('expense_category_id')) {
-            $categoryBelongsToUser = ExpenseCategory::where('id', $request->expense_category_id)
-                ->where('user_id', $user->id)
-                ->exists();
-                
-            if (!$categoryBelongsToUser) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Kategori biaya tidak ditemukan'
-                ], 404);
-            }
-        }
 
         $categoryIdChanged = $request->has('expense_category_id') && $expense->expense_category_id != $request->expense_category_id;
         $yearChanged = $request->has('year') && $expense->year != $request->year;
         $monthChanged = $request->has('month') && $expense->month != $request->month;
         
+        // Check for duplicate if category, year, or month is being changed
         if ($categoryIdChanged || $yearChanged || $monthChanged) {
             $expenseCategoryId = $request->expense_category_id ?? $expense->expense_category_id;
             $year = $request->year ?? $expense->year;
             $month = $request->month ?? $expense->month;
             
-            $existingExpense = OperationalExpense::where('user_id', $user->id)
-                ->where('expense_category_id', $expenseCategoryId)
+            $existingExpense = OperationalExpense::where('expense_category_id', $expenseCategoryId)
                 ->where('year', $year)
                 ->where('month', $month)
                 ->where('id', '!=', $id)
@@ -266,9 +223,7 @@ class OperationalExpenseController extends Controller
      */
     public function destroy(string $id)
     {
-        $user = JWTAuth::user();
-        
-        $expense = OperationalExpense::where('user_id', $user->id)->find($id);
+        $expense = OperationalExpense::find($id);
 
         if (!$expense) {
             return response()->json([
