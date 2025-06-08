@@ -44,13 +44,20 @@ class OperationalExpense extends Model
         parent::boot();
 
         static::saving(function ($expense) {
-            $conversionFactor = 1;
+            
             if (strtolower($expense->unit) === 'minggu') {
-                $conversionFactor = 4; 
+                $expense->total_amount = $expense->quantity * $expense->amount * 4;
+            } elseif (strtolower($expense->unit) === '4 bulan') {
+                $expense->total_amount = ($expense->quantity * $expense->amount) / 4;
+            } elseif (strtolower($expense->unit) === '6 bulan') {
+                $expense->total_amount = ($expense->quantity * $expense->amount) / 6;
+            } elseif (strtolower($expense->unit) === '8 bulan') {
+                $expense->total_amount = ($expense->quantity * $expense->amount) / 8;
+            } elseif (strtolower($expense->unit) === 'tahun') {
+                $expense->total_amount = ($expense->quantity * $expense->amount) / 12;
+            } else {
+                $expense->total_amount = $expense->quantity * $expense->amount;
             }
-            
-            $expense->total_amount = $expense->quantity * $expense->amount * $conversionFactor;
-            
             if (empty($expense->year)) {
                 $expense->year = Carbon::now()->year;
             }
